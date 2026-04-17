@@ -22,6 +22,37 @@ function cardShell({ title, description, content, footer = '' }) {
   `
 }
 
+function renderViewTabs(currentView) {
+  const tabs = [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'trader', label: 'Trader' },
+  ]
+
+  return `
+    <nav class="inline-flex rounded-2xl border border-white/10 bg-slate-950/45 p-1">
+      ${tabs
+        .map((tab) => {
+          const active = currentView === tab.id
+          return `
+            <button
+              type="button"
+              data-action="navigate"
+              data-view="${tab.id}"
+              class="inline-flex h-11 items-center justify-center rounded-xl px-4 text-sm font-medium transition ${
+                active
+                  ? 'bg-white text-slate-950 shadow-[0_8px_30px_rgba(255,255,255,0.12)]'
+                  : 'text-zinc-300 hover:bg-white/6 hover:text-white'
+              }"
+            >
+              ${tab.label}
+            </button>
+          `
+        })
+        .join('')}
+    </nav>
+  `
+}
+
 function renderSelectOptions(selectedValue) {
   return ASSET_TYPES.map(
     (type) => `<option value="${type}" ${selectedValue === type ? 'selected' : ''}>${type}</option>`,
@@ -245,6 +276,7 @@ export function renderDashboardView({
   totalAssetsCount,
   filters,
   editingAsset,
+  currentView,
 }) {
   const initial = getInitials(user.email)
   const selectedType = editingAsset?.type || ASSET_TYPES[0]
@@ -355,7 +387,8 @@ export function renderDashboardView({
               Acompanhe patrimonio, distribuicao e ativos da sua carteira em uma base preparada para futura integracao com backend.
             </p>
           </div>
-          <div class="flex items-center gap-3">
+          <div class="flex flex-wrap items-center gap-3">
+            ${renderViewTabs(currentView)}
             <div class="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/50 text-sm font-semibold text-white">${initial}</div>
             <button type="button" data-action="logout" class="inline-flex h-12 items-center justify-center rounded-2xl border border-white/10 px-4 font-medium text-white transition hover:bg-white/6">
               Sair
@@ -371,6 +404,328 @@ export function renderDashboardView({
         </section>
 
         ${assetsCard}
+      </div>
+    </main>
+  `
+}
+
+function renderTraderResults(results, selectedAssetIds) {
+  if (!results.length) {
+    return `
+      <div class="rounded-3xl border border-dashed border-white/10 bg-white/4 p-6 text-sm text-zinc-400">
+        Busque um ativo por nome ou ticker para montar o painel trader.
+      </div>
+    `
+  }
+
+  return `
+    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      ${results
+        .map((asset) => {
+          const checked = selectedAssetIds.includes(asset.id)
+          const badgeClass = TYPE_BADGES[asset.type] || 'bg-white/10 text-zinc-200'
+
+          return `
+            <label class="flex cursor-pointer items-start gap-3 rounded-3xl border ${
+              checked ? 'border-cyan-300/45 bg-cyan-400/10' : 'border-white/10 bg-white/4'
+            } p-4 transition hover:border-cyan-300/35 hover:bg-white/6">
+              <input
+                type="checkbox"
+                name="trader-assets"
+                value="${asset.id}"
+                ${checked ? 'checked' : ''}
+                class="mt-1 h-4 w-4 rounded border-white/20 bg-slate-950 text-cyan-300"
+              />
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <p class="text-sm font-medium text-white">${asset.name}</p>
+                  <span class="rounded-full px-3 py-1 text-[11px] font-medium ${badgeClass}">${asset.type}</span>
+                </div>
+                <p class="mt-2 text-xs text-zinc-400">${asset.symbol} • ${asset.source}</p>
+              </div>
+            </label>
+          `
+        })
+        .join('')}
+    </div>
+  `
+}
+
+function renderTraderSelectedAssets(selectedAssets, activeTraderAssetId) {
+  if (!selectedAssets.length) {
+    return `
+      <div class="rounded-3xl border border-dashed border-white/10 bg-white/4 p-5 text-sm text-zinc-400">
+        Nenhum ativo selecionado ainda.
+      </div>
+    `
+  }
+
+  return `
+    <div class="flex flex-wrap gap-3">
+      ${selectedAssets
+        .map((asset) => {
+          const badgeClass = TYPE_BADGES[asset.type] || 'bg-white/10 text-zinc-200'
+          const isActive = asset.id === activeTraderAssetId
+          return `
+            <div class="flex items-center gap-3 rounded-2xl border ${
+              isActive ? 'border-cyan-300/45 bg-cyan-400/10' : 'border-white/10 bg-white/5'
+            } px-4 py-3">
+              <div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <p class="text-sm font-medium text-white">${asset.name}</p>
+                  <span class="rounded-full px-3 py-1 text-[11px] font-medium ${badgeClass}">${asset.type}</span>
+                </div>
+                <p class="mt-1 text-xs text-zinc-400">${asset.symbol}</p>
+              </div>
+              <button
+                type="button"
+                data-action="activate-trader-asset"
+                data-asset-id="${asset.id}"
+                class="inline-flex h-9 items-center justify-center rounded-xl border border-cyan-400/20 px-3 text-xs font-medium ${
+                  isActive ? 'bg-cyan-300 text-slate-950' : 'text-cyan-100 transition hover:bg-cyan-400/10'
+                }"
+              >
+                ${isActive ? 'Ativo' : 'Abrir'}
+              </button>
+              <button
+                type="button"
+                data-action="remove-trader-asset"
+                data-asset-id="${asset.id}"
+                class="inline-flex h-9 items-center justify-center rounded-xl border border-rose-400/20 px-3 text-xs font-medium text-rose-200 transition hover:bg-rose-400/10"
+              >
+                Remover
+              </button>
+            </div>
+          `
+        })
+        .join('')}
+    </div>
+  `
+}
+
+export function renderTraderLegend(series) {
+  if (!series.length) {
+    return `
+      <div class="rounded-2xl border border-dashed border-white/10 bg-white/4 p-5 text-sm text-zinc-400">
+        Escolha um ativo para exibir o candle chart.
+      </div>
+    `
+  }
+
+  return `
+    <div class="grid gap-3">
+      ${series
+        .map(
+          (item) => {
+            const opening = item.periodOpen > 0 ? formatCurrency(item.periodOpen) : 'Indisponivel'
+            const closing = item.periodClose > 0 ? formatCurrency(item.periodClose) : 'Indisponivel'
+            const high = item.periodHigh > 0 ? formatCurrency(item.periodHigh) : 'Indisponivel'
+            const low = item.periodLow > 0 ? formatCurrency(item.periodLow) : 'Indisponivel'
+            return `
+            <div class="rounded-3xl border border-white/10 bg-white/4 p-4">
+              <div class="mb-4 flex items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                  <span class="h-3 w-3 rounded-full" style="background:${item.color}"></span>
+                  <div>
+                    <p class="text-sm font-medium text-white">${item.name}</p>
+                    <p class="text-xs text-zinc-400">${item.symbol}</p>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <p class="text-sm font-medium ${getVariationTone(item.variation)}">${formatPercent(item.variation)}</p>
+                  <p class="mt-1 text-[11px] text-zinc-500">${item.quoteSourceLabel || item.source}</p>
+                </div>
+              </div>
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div class="rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3">
+                  <p class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Abertura</p>
+                  <p class="mt-2 break-all text-xl font-semibold text-white">${opening}</p>
+                </div>
+                <div class="rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3">
+                  <p class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Fechamento</p>
+                  <p class="mt-2 break-all text-xl font-semibold text-white">${closing}</p>
+                </div>
+                <div class="rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3">
+                  <p class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Maxima</p>
+                  <p class="mt-2 break-all text-lg font-semibold text-emerald-200">${high}</p>
+                </div>
+                <div class="rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3">
+                  <p class="text-[11px] uppercase tracking-[0.24em] text-zinc-500">Minima</p>
+                  <p class="mt-2 break-all text-lg font-semibold text-rose-200">${low}</p>
+                </div>
+              </div>
+            </div>
+          `
+          },
+        )
+        .join('')}
+    </div>
+  `
+}
+
+export function renderTraderView({
+  user,
+  currentView,
+  traderType,
+  traderQuery,
+  traderResults,
+  selectedAssets,
+  activeTraderAssetId,
+  traderDateFrom,
+  traderDateTo,
+  traderPreset,
+  traderStatus,
+  selectedAssetsCount,
+}) {
+  const initial = getInitials(user.email)
+  const typeOptions = ['Ações', 'FIIs', 'BDRs', 'ETFs', 'Ações Internacionais', 'Criptomoedas']
+    .map(
+      (type) => `<option value="${type}" ${traderType === type ? 'selected' : ''}>${type}</option>`,
+    )
+    .join('')
+  const presetButtons = ['1D', '1W', '1M', '3M']
+    .map(
+      (preset) => `
+        <button
+          type="button"
+          data-action="apply-trader-preset"
+          data-preset="${preset}"
+          class="inline-flex h-10 items-center justify-center rounded-xl border px-4 text-xs font-medium transition ${
+            traderPreset === preset
+              ? 'border-cyan-300/40 bg-cyan-300 text-slate-950'
+              : 'border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10'
+          }"
+        >
+          ${preset}
+        </button>
+      `,
+    )
+    .join('')
+
+  const traderPanel = cardShell({
+    title: 'Painel Trader',
+    description: 'Busca de mercado e graficos por ativo',
+    content: `
+      <div class="space-y-5">
+        <div class="rounded-3xl border border-white/10 bg-slate-950/45 p-5">
+          <p class="text-sm text-zinc-300">
+            Busque ativos direto nas APIs de mercado. Selecione um ou mais, e abra o ativo desejado para ver o candle chart.
+          </p>
+          <p class="mt-2 text-xs uppercase tracking-[0.28em] text-zinc-500">
+            ${selectedAssetsCount} ativo(s) selecionado(s)
+          </p>
+        </div>
+        <form id="trader-search-form" class="grid gap-4 md:grid-cols-[220px_1fr_auto] md:items-end" autocomplete="off">
+          <label class="block">
+            <span class="mb-2 block text-sm text-zinc-300">Tipo</span>
+            <select name="traderType" class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 text-white outline-none transition focus:border-cyan-300/50">
+              ${typeOptions}
+            </select>
+          </label>
+          <label class="block">
+            <span class="mb-2 block text-sm text-zinc-300">Buscar ativo</span>
+            <input
+              name="traderQuery"
+              type="text"
+              value="${traderQuery}"
+              autocomplete="off"
+              class="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-white outline-none transition focus:border-cyan-300/50"
+              placeholder="Digite nome ou ticker"
+              required
+            />
+          </label>
+          <button type="submit" class="inline-flex h-12 items-center justify-center rounded-2xl bg-white px-5 font-medium text-slate-950 transition hover:bg-cyan-100">
+            Buscar
+          </button>
+        </form>
+        <form id="trader-period-form" class="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end" autocomplete="off">
+          <div class="md:col-span-3 flex flex-wrap gap-2">
+            ${presetButtons}
+          </div>
+          <label class="block">
+            <span class="mb-2 block text-sm text-zinc-300">Data inicial</span>
+            <input
+              name="traderDateFrom"
+              type="date"
+              value="${traderDateFrom}"
+              class="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-white outline-none transition focus:border-cyan-300/50"
+              required
+            />
+          </label>
+          <label class="block">
+            <span class="mb-2 block text-sm text-zinc-300">Data final</span>
+            <input
+              name="traderDateTo"
+              type="date"
+              value="${traderDateTo}"
+              class="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-white outline-none transition focus:border-cyan-300/50"
+              required
+            />
+          </label>
+          <button type="submit" class="inline-flex h-12 items-center justify-center rounded-2xl border border-cyan-300/30 px-5 font-medium text-cyan-100 transition hover:bg-cyan-400/10">
+            Aplicar periodo
+          </button>
+        </form>
+        <p id="trader-feedback" class="min-h-6 text-sm text-zinc-400">${traderStatus}</p>
+        ${renderTraderSelectedAssets(selectedAssets, activeTraderAssetId)}
+        <form id="trader-selection-form" class="space-y-4" autocomplete="off">
+          ${renderTraderResults(
+            traderResults,
+            selectedAssets.map((asset) => asset.id),
+          )}
+        </form>
+      </div>
+    `,
+  })
+
+  const chartPanel = cardShell({
+    title: 'Grafico',
+    description: 'Candles da sessao trader',
+    content: `
+      <div class="space-y-6">
+        <div class="rounded-[1.75rem] border border-cyan-300/15 bg-[linear-gradient(180deg,rgba(7,19,36,0.98),rgba(4,10,21,0.98))] p-4 shadow-[0_18px_80px_rgba(0,0,0,0.35)]">
+          <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p class="text-xs uppercase tracking-[0.28em] text-cyan-200/70">Pulse Trader</p>
+              <h2 class="mt-2 text-lg font-semibold text-white">Candles do ativo selecionado</h2>
+            </div>
+            <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-xs text-zinc-400">
+              Intraday quando a API responder
+            </div>
+          </div>
+          <div class="h-[62vh] min-h-[520px]">
+            <canvas id="trader-chart" class="block h-full w-full" aria-label="Grafico candle do ativo selecionado"></canvas>
+          </div>
+        </div>
+        <div id="trader-legend" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3"></div>
+      </div>
+    `,
+  })
+
+  return `
+    <main class="min-h-screen bg-[radial-gradient(circle_at_top,#0c233d_0%,#07111f_45%,#040814_100%)] px-4 py-6 text-zinc-100">
+      <div class="mx-auto max-w-7xl space-y-6">
+        <header class="flex flex-col gap-4 rounded-[2rem] border border-white/10 bg-white/6 p-6 shadow-[0_20px_80px_rgba(3,8,20,0.35)] backdrop-blur lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p class="text-xs uppercase tracking-[0.32em] text-zinc-500">Trader</p>
+            <h1 class="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Painel de comparacao</h1>
+            <p class="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
+              Pesquise ativos no mercado e acompanhe candles como painel trader, sem depender dos ativos cadastrados na carteira.
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center gap-3">
+            ${renderViewTabs(currentView)}
+            <div class="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/50 text-sm font-semibold text-white">${initial}</div>
+            <button type="button" data-action="logout" class="inline-flex h-12 items-center justify-center rounded-2xl border border-white/10 px-4 font-medium text-white transition hover:bg-white/6">
+              Sair
+            </button>
+          </div>
+        </header>
+
+        <section class="grid gap-6">
+          ${traderPanel}
+          ${chartPanel}
+        </section>
       </div>
     </main>
   `

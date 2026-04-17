@@ -14,16 +14,48 @@ import {
   saveUserPortfolio,
   upsertUser,
 } from './lib/storage'
-import { fetchAssetQuote, resolveAssetDetails } from './services/market'
-import { renderAuthView, renderDashboardView, renderLegend } from './ui/components'
+import {
+  fetchAssetQuote,
+  fetchTraderSeries,
+  resolveAssetDetails,
+  searchTraderAssets,
+} from './services/market'
+import {
+  renderAuthView,
+  renderDashboardView,
+  renderLegend,
+  renderTraderLegend,
+  renderTraderView,
+} from './ui/components'
 
 export function createApp(root) {
+  const today = new Date().toISOString().slice(0, 10)
+  const defaultTraderStart = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10)
+  const traderPresetOptions = {
+    '1D': 1,
+    '1W': 7,
+    '1M': 30,
+    '3M': 90,
+  }
+
   let state = {
     user: null,
     hydratedAssets: [],
     chart: null,
     editingAssetId: null,
     assetLookupToken: 0,
+    currentView: 'dashboard',
+    traderType: 'Ações',
+    traderQuery: '',
+    traderResults: [],
+    traderAssets: [],
+    activeTraderAssetId: null,
+    traderDateFrom: defaultTraderStart,
+    traderDateTo: today,
+    traderPreset: '1D',
+    traderStatus: 'Busque um ticker ou nome para carregar ativos direto das APIs.',
     assetFormState: {
       syncing: false,
       manualField: null,
@@ -464,6 +496,293 @@ export function createApp(root) {
     })
   }
 
+  function renderTraderChart(selectedAssets) {
+    destroyChart()
+    const canvas = root.querySelector('#trader-chart')
+    const legend = root.querySelector('#trader-legend')
+    if (!canvas || !legend) return
+
+    const activeAsset =
+      selectedAssets.find((asset) => asset.id === state.activeTraderAssetId) || selectedAssets[0]
+
+    const series = selectedAssets.map((asset, index) => ({
+      ...asset,
+      color: CHART_COLORS[index % CHART_COLORS.length],
+    }))
+
+    legend.innerHTML = renderTraderLegend(series)
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const dpr = window.devicePixelRatio || 1
+    const width = canvas.clientWidth || canvas.parentElement?.clientWidth || 1200
+    const height = canvas.clientHeight || canvas.parentElement?.clientHeight || 620
+    canvas.width = width * dpr
+    canvas.height = height * dpr
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.clearRect(0, 0, width, height)
+    ctx.fillStyle = '#071321'
+    ctx.fillRect(0, 0, width, height)
+
+    if (!activeAsset?.series?.candles?.length) {
+      ctx.fillStyle = 'rgba(228,228,231,0.85)'
+      ctx.font = '600 18px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('Serie indisponivel para o periodo selecionado', width / 2, height / 2 - 8)
+      ctx.fillStyle = 'rgba(161,161,170,0.78)'
+      ctx.font = '13px sans-serif'
+      ctx.fillText('Ajuste o intervalo ou selecione outro provedor/ativo.', width / 2, height / 2 + 20)
+      return
+    }
+
+    const candles = activeAsset.series.candles
+    const prices = candles.flatMap((candle) => [candle.high, candle.low])
+    const maxPrice = Math.max(...prices)
+    const minPrice = Math.min(...prices)
+    const range = Math.max(maxPrice - minPrice, 0.0001)
+    const padding = { top: 24, right: 88, bottom: 48, left: 20 }
+    const chartWidth = width - padding.left - padding.right
+    const chartHeight = height - padding.top - padding.bottom
+    const step = chartWidth / candles.length
+    const candleWidth = Math.max(Math.min(step * 0.42, 16), 5)
+
+    const toY = (price) => padding.top + ((maxPrice - price) / range) * chartHeight
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)'
+    ctx.lineWidth = 1
+    for (let i = 0; i <= 5; i += 1) {
+      const y = padding.top + (chartHeight / 5) * i
+      ctx.beginPath()
+      ctx.moveTo(padding.left, y)
+      ctx.lineTo(width - padding.right, y)
+      ctx.stroke()
+    }
+
+    ctx.font = '12px sans-serif'
+    ctx.fillStyle = 'rgba(228,228,231,0.72)'
+    ctx.textAlign = 'left'
+    ctx.fillText(`${activeAsset.name} (${activeAsset.symbol})`, padding.left, 16)
+    ctx.textAlign = 'right'
+    ctx.fillText(activeAsset.quoteSourceLabel || activeAsset.source || 'API', width - padding.right, 16)
+
+    for (let i = 0; i <= 5; i += 1) {
+      const ratio = i / 5
+      const price = maxPrice - range * ratio
+      const y = padding.top + chartHeight * ratio
+      ctx.fillStyle = 'rgba(228,228,231,0.64)'
+      ctx.textAlign = 'left'
+      ctx.fillText(
+        price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+        width - padding.right + 12,
+        y + 4,
+      )
+    }
+
+    candles.forEach((candle, index) => {
+      const x = padding.left + step * index + step / 2
+      const openY = toY(candle.open)
+      const closeY = toY(candle.close)
+      const highY = toY(candle.high)
+      const lowY = toY(candle.low)
+      const previousClose = Number(candles[Math.max(index - 1, 0)]?.close || candle.open)
+      const positive = index === 0 ? candle.close >= candle.open : candle.close >= previousClose
+      const color = positive ? '#34d399' : '#fb7185'
+
+      ctx.strokeStyle = color
+      ctx.lineWidth = 1.4
+      ctx.beginPath()
+      ctx.moveTo(x, highY)
+      ctx.lineTo(x, lowY)
+      ctx.stroke()
+
+      const bodyTop = Math.min(openY, closeY)
+      const bodyHeight = Math.max(Math.abs(closeY - openY), 2)
+      ctx.fillStyle = color
+      ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight)
+    })
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)'
+    ctx.beginPath()
+    ctx.moveTo(padding.left, height - padding.bottom)
+    ctx.lineTo(width - padding.right, height - padding.bottom)
+    ctx.stroke()
+
+    const labelStep = Math.max(Math.floor(candles.length / 8), 1)
+    ctx.fillStyle = 'rgba(228,228,231,0.64)'
+    ctx.textAlign = 'center'
+    candles.forEach((candle, index) => {
+      if (index % labelStep !== 0 && index !== candles.length - 1) return
+      const x = padding.left + step * index + step / 2
+      ctx.fillText(candle.label, x, height - 18)
+    })
+  }
+
+  async function runTraderSearch(query, type) {
+    const normalizedQuery = sanitizeText(query)
+    if (!normalizedQuery) {
+      state = {
+        ...state,
+        traderQuery: '',
+        traderResults: [],
+        traderPreset: state.traderPreset,
+        traderStatus: 'Digite um ticker ou nome para consultar os ativos nas APIs.',
+      }
+      render()
+      return
+    }
+
+    state = {
+      ...state,
+      traderQuery: normalizedQuery,
+      traderType: type,
+      traderPreset: state.traderPreset,
+      traderStatus: `Buscando ativos de ${type} nas APIs...`,
+    }
+    render()
+
+    const results = await searchTraderAssets({
+      query: normalizedQuery,
+      type,
+    })
+
+    state = {
+      ...state,
+      traderQuery: normalizedQuery,
+      traderType: type,
+      traderResults: results,
+      traderPreset: state.traderPreset,
+      traderStatus: results.length
+        ? `${results.length} ativo(s) encontrado(s) em provedores de mercado.`
+        : `Nenhum ativo encontrado para ${normalizedQuery} em ${type}.`,
+    }
+    render()
+  }
+
+  async function loadTraderAssetSeries(asset) {
+    const quote = await fetchAssetQuote({
+      symbol: asset.symbol,
+      type: asset.type,
+    })
+    const series = await fetchTraderSeries({
+      symbol: asset.symbol,
+      type: asset.type,
+      providerId: asset.providerId,
+      currentPrice: Number(quote.price || asset.currentPrice || 0),
+      variation: Number(quote.variation || asset.variation || 0),
+      dateFrom: state.traderDateFrom,
+      dateTo: state.traderDateTo,
+    })
+    const seriesCandles = Array.isArray(series?.candles) ? series.candles : []
+    const periodOpen = Number(seriesCandles[0]?.open || 0)
+    const periodHigh = seriesCandles.length
+      ? Math.max(...seriesCandles.map((candle) => Number(candle.high || 0)))
+      : 0
+    const periodLow = seriesCandles.length
+      ? Math.min(...seriesCandles.map((candle) => Number(candle.low || 0)).filter((value) => value > 0))
+      : 0
+    const firstSeriesClose = Number(seriesCandles[0]?.close || 0)
+    const lastSeriesClose = Number(seriesCandles[seriesCandles.length - 1]?.close || 0)
+    const periodVariation =
+      firstSeriesClose > 0 ? (lastSeriesClose - firstSeriesClose) / firstSeriesClose : 0
+    const displayedPrice = lastSeriesClose || 0
+    const displayedVariation = seriesCandles.length > 1 ? periodVariation : 0
+    const displaySource = series?.source || null
+
+    return {
+      ...asset,
+      currentPrice: displayedPrice,
+      variation: displayedVariation,
+      quoteSource: displaySource,
+      quoteSourceLabel: displaySource ? QUOTE_SOURCE_META[displaySource]?.label || displaySource : 'Serie indisponivel',
+      periodOpen,
+      periodHigh,
+      periodLow,
+      periodClose: lastSeriesClose || displayedPrice,
+      series,
+      seriesError: !series,
+      usedCachedSeries: Boolean(series?.fromCache),
+    }
+  }
+
+  async function reloadTraderAssetsForPeriod() {
+    if (!state.traderAssets.length) {
+      state = {
+        ...state,
+        traderStatus: 'Defina um periodo e selecione ao menos um ativo para carregar a serie.',
+      }
+      render()
+      return
+    }
+
+    state = {
+      ...state,
+      traderStatus: `Atualizando series entre ${state.traderDateFrom} e ${state.traderDateTo}...`,
+    }
+    render()
+
+    const reloadedAssets = await Promise.all(state.traderAssets.map((asset) => loadTraderAssetSeries(asset)))
+    state = {
+      ...state,
+      traderAssets: reloadedAssets,
+      activeTraderAssetId:
+        reloadedAssets.find((asset) => asset.id === state.activeTraderAssetId)?.id ||
+        reloadedAssets[0]?.id ||
+        null,
+      traderStatus: reloadedAssets.some((asset) => asset.seriesError)
+        ? 'Alguns ativos nao retornaram serie para esse periodo.'
+        : reloadedAssets.some((asset) => asset.usedCachedSeries)
+          ? 'Periodo aplicado. Parte das series veio do cache local para manter estabilidade.'
+        : 'Periodo aplicado ao candle chart.',
+    }
+    render()
+  }
+
+  function resolveTraderPresetDates(preset) {
+    const days = traderPresetOptions[preset] || 1
+    const dateTo = new Date()
+    const dateFrom = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+    return {
+      traderDateFrom: dateFrom.toISOString().slice(0, 10),
+      traderDateTo: dateTo.toISOString().slice(0, 10),
+    }
+  }
+
+  async function toggleTraderAssetSelection(assetId, checked) {
+    const selectedAsset = state.traderResults.find((asset) => asset.id === assetId)
+    if (!selectedAsset) return
+
+    if (!checked) {
+      const remainingAssets = state.traderAssets.filter((asset) => asset.id !== assetId)
+      state = {
+        ...state,
+        traderAssets: remainingAssets,
+        activeTraderAssetId:
+          state.activeTraderAssetId === assetId ? remainingAssets[0]?.id || null : state.activeTraderAssetId,
+        traderStatus: 'Ativo removido do painel trader.',
+      }
+      render()
+      return
+    }
+
+    if (state.traderAssets.some((asset) => asset.id === assetId)) return
+
+    state = {
+      ...state,
+      traderStatus: `Carregando serie de preco para ${selectedAsset.symbol}...`,
+    }
+    render()
+
+    const enrichedAsset = await loadTraderAssetSeries(selectedAsset)
+    state = {
+      ...state,
+      traderAssets: [...state.traderAssets, enrichedAsset],
+      activeTraderAssetId: state.activeTraderAssetId || enrichedAsset.id,
+      traderStatus: `Serie carregada para ${selectedAsset.symbol} via ${enrichedAsset.series?.source === 'fallback' ? 'fallback visual' : enrichedAsset.quoteSourceLabel || 'API'}.`,
+    }
+    render()
+  }
+
   function bindAuthForm() {
     const form = root.querySelector('#login-form')
     if (!form) return
@@ -674,7 +993,16 @@ export function createApp(root) {
           user: null,
           hydratedAssets: [],
           editingAssetId: null,
-        }
+          currentView: 'dashboard',
+          traderQuery: '',
+          traderResults: [],
+        traderAssets: [],
+        activeTraderAssetId: null,
+        traderDateFrom: defaultTraderStart,
+        traderDateTo: today,
+        traderPreset: '1D',
+        traderStatus: 'Busque um ticker ou nome para carregar ativos direto das APIs.',
+      }
         render()
         return
       }
@@ -685,6 +1013,15 @@ export function createApp(root) {
         if (feedback) feedback.textContent = 'Buscando cotacoes mais recentes...'
         await hydratePortfolio(getUserByEmail(state.user.email))
         render()
+        return
+      }
+
+      if (action === 'navigate') {
+        const nextView = target.dataset.view
+        if (nextView === 'dashboard' || nextView === 'trader') {
+          state = { ...state, currentView: nextView }
+          render()
+        }
         return
       }
 
@@ -709,8 +1046,98 @@ export function createApp(root) {
           editingAssetId: state.editingAssetId === assetId ? null : state.editingAssetId,
         }
         render()
+        return
+      }
+
+      if (action === 'remove-trader-asset' && assetId) {
+        const remainingAssets = state.traderAssets.filter((asset) => asset.id !== assetId)
+        state = {
+          ...state,
+          traderAssets: remainingAssets,
+          activeTraderAssetId:
+            state.activeTraderAssetId === assetId ? remainingAssets[0]?.id || null : state.activeTraderAssetId,
+          traderStatus: 'Ativo removido do painel trader.',
+        }
+        render()
+        return
+      }
+
+      if (action === 'activate-trader-asset' && assetId) {
+        state = {
+          ...state,
+          activeTraderAssetId: assetId,
+          traderStatus: 'Ativo trader alterado.',
+        }
+        render()
+        return
+      }
+
+      if (action === 'apply-trader-preset') {
+        const preset = target.dataset.preset
+        if (!preset) return
+        const { traderDateFrom, traderDateTo } = resolveTraderPresetDates(preset)
+        state = {
+          ...state,
+          traderPreset: preset,
+          traderDateFrom,
+          traderDateTo,
+        }
+        await reloadTraderAssetsForPeriod()
       }
     })
+  }
+
+  function bindTraderActions() {
+    const searchForm = root.querySelector('#trader-search-form')
+    const periodForm = root.querySelector('#trader-period-form')
+    const selectionForm = root.querySelector('#trader-selection-form')
+    const traderFeedback = root.querySelector('#trader-feedback')
+
+    searchForm?.addEventListener('submit', async (event) => {
+      event.preventDefault()
+      const formData = new FormData(searchForm)
+      const traderType = sanitizeText(formData.get('traderType'))
+      const traderQuery = sanitizeText(formData.get('traderQuery'))
+      await runTraderSearch(traderQuery, traderType)
+    })
+
+    periodForm?.addEventListener('submit', async (event) => {
+      event.preventDefault()
+      const formData = new FormData(periodForm)
+      const traderDateFrom = sanitizeText(formData.get('traderDateFrom'))
+      const traderDateTo = sanitizeText(formData.get('traderDateTo'))
+
+      if (!traderDateFrom || !traderDateTo || traderDateFrom > traderDateTo) {
+        state = {
+          ...state,
+          traderStatus: 'Defina um intervalo valido para o grafico.',
+        }
+        render()
+        return
+      }
+
+      state = {
+        ...state,
+        traderDateFrom,
+        traderDateTo,
+        traderPreset: '',
+      }
+      await reloadTraderAssetsForPeriod()
+    })
+
+    selectionForm?.addEventListener('change', async (event) => {
+      const target = event.target
+      if (!(target instanceof HTMLInputElement) || target.name !== 'trader-assets') return
+
+      if (traderFeedback) {
+        traderFeedback.textContent = target.checked
+          ? 'Carregando ativo selecionado...'
+          : 'Atualizando painel trader...'
+      }
+      await toggleTraderAssetSelection(target.value, target.checked)
+    })
+
+    bindGlobalActions()
   }
 
   function render() {
@@ -724,6 +1151,26 @@ export function createApp(root) {
     const filteredAssets = getFilteredAssets(state.hydratedAssets)
     const summary = getSummary(filteredAssets)
     const allocation = getAllocation(filteredAssets)
+    if (state.currentView === 'trader') {
+      root.innerHTML = renderTraderView({
+        user: state.user,
+        currentView: state.currentView,
+        traderType: state.traderType,
+        traderQuery: state.traderQuery,
+        traderResults: state.traderResults,
+        selectedAssets: state.traderAssets,
+        activeTraderAssetId: state.activeTraderAssetId,
+        traderDateFrom: state.traderDateFrom,
+        traderDateTo: state.traderDateTo,
+        traderPreset: state.traderPreset,
+        traderStatus: state.traderStatus,
+        selectedAssetsCount: state.traderAssets.length,
+      })
+      renderTraderChart(state.traderAssets)
+      bindTraderActions()
+      return
+    }
+
     root.innerHTML = renderDashboardView({
       user: state.user,
       summary,
@@ -731,6 +1178,7 @@ export function createApp(root) {
       totalAssetsCount: state.hydratedAssets.length,
       filters: state.filters,
       editingAsset: getEditingAsset(),
+      currentView: state.currentView,
     })
     renderChart(allocation)
     bindDashboardActions()
