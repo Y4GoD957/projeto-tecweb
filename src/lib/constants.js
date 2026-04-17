@@ -102,9 +102,24 @@ export const CHART_COLORS = [
 ]
 
 export const QUOTE_SOURCE_META = {
+  manual: {
+    label: 'Manual',
+    badgeClass: 'border-fuchsia-400/25 bg-fuchsia-400/10 text-fuchsia-100',
+    tone: 'manual',
+  },
   brapi: {
-    label: 'Brapi',
+    label: 'BrAPI',
     badgeClass: 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100',
+    tone: 'real',
+  },
+  twelvedata: {
+    label: 'Twelve Data',
+    badgeClass: 'border-sky-400/25 bg-sky-400/10 text-sky-100',
+    tone: 'real',
+  },
+  alphavantage: {
+    label: 'Alpha Vantage',
+    badgeClass: 'border-indigo-400/25 bg-indigo-400/10 text-indigo-100',
     tone: 'real',
   },
   coingecko: {

@@ -48,7 +48,7 @@ function renderFilters({ filters, totalAssetsCount, visibleAssetsCount }) {
     .join('')
 
   return `
-    <form id="filters-form" class="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
+    <form id="filters-form" class="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end" autocomplete="off">
       <label class="block">
         <span class="mb-2 block text-sm text-zinc-300">Tipo</span>
         <select name="type" class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 text-white outline-none transition focus:border-cyan-300/50">
@@ -112,12 +112,13 @@ export function renderAuthView() {
               Use qualquer e-mail valido e uma senha com pelo menos 6 caracteres.
             </p>
           </div>
-          <form id="login-form" class="space-y-4">
+          <form id="login-form" class="space-y-4" autocomplete="off">
             <label class="block">
               <span class="mb-2 block text-sm text-zinc-300">E-mail</span>
               <input
                 name="email"
                 type="email"
+                autocomplete="off"
                 class="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-white outline-none transition focus:border-cyan-300/50"
                 placeholder="voce@exemplo.com"
                 required
@@ -128,6 +129,7 @@ export function renderAuthView() {
               <input
                 name="password"
                 type="password"
+                autocomplete="new-password"
                 class="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-white outline-none transition focus:border-cyan-300/50"
                 placeholder="********"
                 required
@@ -191,26 +193,20 @@ function renderAssetRows(assets) {
           const badgeClass = TYPE_BADGES[asset.type] || 'bg-white/10 text-zinc-200'
           const totalValue = asset.marketValue || 0
           return `
-            <article class="grid gap-4 rounded-3xl border border-white/10 bg-slate-950/35 p-4 lg:grid-cols-[1.2fr_0.9fr_0.8fr_0.7fr_auto] lg:items-center">
+            <article class="grid gap-4 rounded-3xl border border-white/10 bg-slate-950/35 p-4 lg:grid-cols-[1.45fr_0.95fr_0.75fr_auto] lg:items-center">
               <div>
                 <div class="flex flex-wrap items-center gap-2">
                   <h3 class="text-lg font-medium text-white">${asset.name}</h3>
                   <span class="rounded-full px-3 py-1 text-xs font-medium ${badgeClass}">${asset.type}</span>
                   <span class="rounded-full border border-white/10 px-3 py-1 text-xs text-zinc-300">${asset.symbol}</span>
                 </div>
-                <p class="mt-2 text-sm text-zinc-400">
-                  Quantidade ${asset.quantity} • Preco medio ${formatCurrency(asset.averagePrice)}
-                </p>
+                <p class="mt-2 text-sm text-zinc-400">Quantidade ${asset.quantity}</p>
                 ${renderQuoteStatus(asset)}
-              </div>
-              <div>
-                <p class="text-xs uppercase tracking-[0.24em] text-zinc-500">Preco atual</p>
-                <p class="mt-2 text-lg font-medium text-white">${formatCurrency(asset.currentPrice)}</p>
-                <p class="mt-1 text-sm text-zinc-400">Fonte: ${asset.quoteSourceLabel}</p>
               </div>
               <div>
                 <p class="text-xs uppercase tracking-[0.24em] text-zinc-500">Valor atual</p>
                 <p class="mt-2 text-lg font-medium text-white">${formatCurrency(totalValue)}</p>
+                <p class="mt-1 text-sm text-zinc-400">Fonte: ${asset.quoteSourceLabel}</p>
               </div>
               <div>
                 <p class="text-xs uppercase tracking-[0.24em] text-zinc-500">Variacao</p>
@@ -255,7 +251,7 @@ export function renderDashboardView({
   const typeRule = getTypeRule(selectedType)
   const summaryCards = [
     ['Patrimonio total', formatCurrency(summary.totalValue), 'Atualizado com o ultimo preco disponivel.'],
-    ['Capital investido', formatCurrency(summary.totalInvested), 'Soma do preco medio ponderado por quantidade.'],
+    ['Capital investido', formatCurrency(summary.totalInvested), 'Soma calculada pela posicao da carteira.'],
     ['Rentabilidade', formatPercent(summary.performance), 'Diferenca entre patrimonio atual e custo total.'],
   ]
 
@@ -269,15 +265,16 @@ export function renderDashboardView({
     title: editingAsset ? 'Editar ativo' : 'Novo ativo',
     description: editingAsset ? 'Ajustar posicao atual' : 'Cadastrar posicao',
     content: `
-      <form id="asset-form" class="grid gap-4 md:grid-cols-2">
+      <form id="asset-form" class="grid gap-4 md:grid-cols-2" autocomplete="off">
         <label class="block">
           <span class="mb-2 block text-sm text-zinc-300">Nome do ativo</span>
-          <input name="name" type="text" value="${editingAsset?.name || ''}" required class="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-white outline-none transition focus:border-cyan-300/50" placeholder="Tesouro Selic 2029" />
+          <input id="asset-name" name="name" type="text" value="${editingAsset?.name || ''}" autocomplete="off" required class="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-white outline-none transition focus:border-cyan-300/50" placeholder="Tesouro Selic 2029" />
         </label>
         <label class="block">
           <span class="mb-2 block text-sm text-zinc-300">Ticker / Codigo</span>
-          <input id="asset-symbol" name="symbol" type="text" value="${editingAsset?.symbol || ''}" required class="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 uppercase text-white outline-none transition focus:border-cyan-300/50" placeholder="${typeRule.symbolPlaceholder}" />
+          <input id="asset-symbol" name="symbol" type="text" value="${editingAsset?.symbol || ''}" autocomplete="off" required class="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 uppercase text-white outline-none transition focus:border-cyan-300/50" placeholder="${typeRule.symbolPlaceholder}" />
           <p id="asset-symbol-hint" class="mt-2 text-xs leading-5 text-zinc-500">${typeRule.symbolHint}</p>
+          <p id="asset-symbol-status" class="mt-2 text-xs leading-5 text-zinc-500">Preencha o ticker conforme o padrao do tipo selecionado.</p>
         </label>
         <label class="block">
           <span class="mb-2 block text-sm text-zinc-300">Tipo</span>
@@ -287,12 +284,18 @@ export function renderDashboardView({
         </label>
         <label class="block">
           <span class="mb-2 block text-sm text-zinc-300">Quantidade</span>
-          <input name="quantity" type="number" min="0.0001" step="0.0001" value="${editingAsset?.quantity ?? ''}" required class="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-white outline-none transition focus:border-cyan-300/50" placeholder="10" />
+          <input id="asset-quantity" name="quantity" type="number" min="0.0001" step="0.0001" value="${editingAsset?.quantity ?? ''}" autocomplete="off" required class="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-white outline-none transition focus:border-cyan-300/50" placeholder="10" />
         </label>
-        <label class="block md:col-span-2">
-          <span class="mb-2 block text-sm text-zinc-300">Preco medio (BRL)</span>
-          <input name="averagePrice" type="number" min="0.01" step="0.01" value="${editingAsset?.averagePrice ?? ''}" required class="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-white outline-none transition focus:border-cyan-300/50" placeholder="100.50" />
+        <label class="block">
+          <span class="mb-2 block text-sm text-zinc-300">Valor atual de mercado (BRL)</span>
+          <input id="asset-market-value" name="marketValue" type="number" min="0.01" step="0.01" value="${
+            editingAsset?.marketValue ? Number(editingAsset.marketValue).toFixed(2) : ''
+          }" autocomplete="off" class="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-white outline-none transition focus:border-cyan-300/50" placeholder="0.00" />
         </label>
+        <input id="asset-market-price" name="currentPrice" type="hidden" value="${editingAsset?.currentPrice ?? ''}" />
+        <p id="asset-autofill-status" class="md:col-span-2 min-h-5 text-xs leading-5 text-zinc-500">
+          Informe o codigo ou o nome do ativo para tentar preencher tipo, nome e valor de mercado.
+        </p>
         <button type="submit" class="inline-flex h-12 items-center justify-center rounded-2xl bg-white px-4 font-medium text-slate-950 transition hover:bg-cyan-100">
           ${editingAsset ? 'Salvar ativo' : 'Adicionar ativo'}
         </button>
