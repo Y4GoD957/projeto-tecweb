@@ -22,22 +22,20 @@ function cardShell({ title, description, content, footer = '' }) {
   `
 }
 
-function renderViewTabs(currentView) {
+function renderViewTabs(currentPage) {
   const tabs = [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'trader', label: 'Trader' },
+    { id: 'dashboard', label: 'Dashboard', href: '/dashboard/' },
+    { id: 'trader', label: 'Trader', href: '/trader/' },
   ]
 
   return `
     <nav class="inline-flex rounded-2xl border border-white/10 bg-slate-950/45 p-1">
       ${tabs
         .map((tab) => {
-          const active = currentView === tab.id
+          const active = currentPage === tab.id
           return `
-            <button
-              type="button"
-              data-action="navigate"
-              data-view="${tab.id}"
+            <a
+              href="${tab.href}"
               class="inline-flex h-11 items-center justify-center rounded-xl px-4 text-sm font-medium transition ${
                 active
                   ? 'bg-white text-slate-950 shadow-[0_8px_30px_rgba(255,255,255,0.12)]'
@@ -45,7 +43,7 @@ function renderViewTabs(currentView) {
               }"
             >
               ${tab.label}
-            </button>
+            </a>
           `
         })
         .join('')}
@@ -276,7 +274,7 @@ export function renderDashboardView({
   totalAssetsCount,
   filters,
   editingAsset,
-  currentView,
+  currentPage,
 }) {
   const initial = getInitials(user.email)
   const selectedType = editingAsset?.type || ASSET_TYPES[0]
@@ -388,7 +386,7 @@ export function renderDashboardView({
             </p>
           </div>
           <div class="flex flex-wrap items-center gap-3">
-            ${renderViewTabs(currentView)}
+            ${renderViewTabs(currentPage)}
             <div class="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/50 text-sm font-semibold text-white">${initial}</div>
             <button type="button" data-action="logout" class="inline-flex h-12 items-center justify-center rounded-2xl border border-white/10 px-4 font-medium text-white transition hover:bg-white/6">
               Sair
@@ -565,7 +563,7 @@ export function renderTraderLegend(series) {
 
 export function renderTraderView({
   user,
-  currentView,
+  currentPage,
   traderType,
   traderQuery,
   traderResults,
@@ -714,7 +712,7 @@ export function renderTraderView({
             </p>
           </div>
           <div class="flex flex-wrap items-center gap-3">
-            ${renderViewTabs(currentView)}
+            ${renderViewTabs(currentPage)}
             <div class="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/50 text-sm font-semibold text-white">${initial}</div>
             <button type="button" data-action="logout" class="inline-flex h-12 items-center justify-center rounded-2xl border border-white/10 px-4 font-medium text-white transition hover:bg-white/6">
               Sair

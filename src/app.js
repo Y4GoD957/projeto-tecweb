@@ -5,6 +5,7 @@ import {
   LEGACY_ASSET_TYPE_MAP,
   QUOTE_SOURCE_META,
 } from './lib/constants'
+import { redirectToPage } from './lib/navigation'
 import { createId, sanitizeText } from './lib/utils'
 import {
   clearSession,
@@ -28,34 +29,142 @@ import {
   renderTraderView,
 } from './ui/components'
 
-export function createApp(root) {
-  const today = new Date().toISOString().slice(0, 10)
-  const defaultTraderStart = new Date(Date.now() - 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10)
-  const traderPresetOptions = {
-    '1D': 1,
-    '1W': 7,
-    '1M': 30,
-    '3M': 90,
+function normalizeAssetType(type) {
+  return LEGACY_ASSET_TYPE_MAP[type] || type
+}
+
+function normalizeAsset(asset) {
+  return {
+    ...asset,
+    type: normalizeAssetType(asset.type),
+    symbol: sanitizeText(asset.symbol).toUpperCase(),
+  }
+}
+
+function getTypeRule(type) {
+  return ASSET_TYPE_RULES[normalizeAssetType(type)] || ASSET_TYPE_RULES['Renda Fixa']
+}
+
+function validateAssetSymbol(type, symbol) {
+  const rule = getTypeRule(type)
+  return rule.symbolPattern.test(symbol) ? '' : rule.symbolError
+}
+
+function normalizeSymbolInput(type, symbol) {
+  const trimmed = sanitizeText(symbol)
+  if (!trimmed) return ''
+
+  if (type === 'Criptomoedas') {
+    return trimmed.replace(/\s+/g, '').replace(/_/g, '-')
   }
 
+  return trimmed.toUpperCase().replace(/\s+/g, '')
+}
+
+function getAutofillProviderLabels(type) {
+  if (type === 'Criptomoedas') return ['CoinGecko']
+  if (type === 'Ações' || type === 'FIIs' || type === 'BDRs' || type === 'ETFs') {
+    return ['BrAPI', 'Twelve Data', 'Alpha Vantage']
+  }
+  if (type === 'Ações Internacionais') return ['Twelve Data', 'Alpha Vantage']
+  return []
+}
+
+function getQuoteSourceLabel(source) {
+  return QUOTE_SOURCE_META[source]?.label || source || 'API'
+}
+
+function getNumericInputValue(input) {
+  return input ? Number(input.value || 0) : 0
+}
+
+function setInputValue(input, value, decimals = 4) {
+  if (!input) return
+  input.value = Number.isFinite(value) && value > 0 ? value.toFixed(decimals) : ''
+}
+
+function requireAuthenticatedUser() {
+  const session = getSession()
+  if (!session?.email) {
+    redirectToPage('login')
+    return null
+  }
+
+  const user = getUserByEmail(session.email)
+  if (!user) {
+    clearSession()
+    redirectToPage('login')
+    return null
+  }
+
+  return user
+}
+
+export function createLoginPage(root) {
+  function bindAuthForm() {
+    const form = root.querySelector('#login-form')
+    if (!form) return
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault()
+      const feedback = root.querySelector('#auth-feedback')
+      const formData = new FormData(form)
+      const email = sanitizeText(formData.get('email')).toLowerCase()
+      const password = sanitizeText(formData.get('password'))
+
+      if (!email.includes('@')) {
+        feedback.textContent = 'Informe um e-mail valido.'
+        return
+      }
+
+      if (password.length < 6) {
+        feedback.textContent = 'A senha deve ter pelo menos 6 caracteres.'
+        return
+      }
+
+      const existingUser = getUserByEmail(email)
+      if (existingUser && existingUser.password !== password) {
+        feedback.textContent = 'Senha incorreta para esta conta local.'
+        return
+      }
+
+      const user =
+        existingUser ||
+        upsertUser({
+          email,
+          password,
+          portfolio: [],
+          createdAt: new Date().toISOString(),
+        })
+
+      createSession(user.email)
+      feedback.textContent = 'Redirecionando para o dashboard...'
+      redirectToPage('dashboard')
+    })
+  }
+
+  function init() {
+    const session = getSession()
+    const user = session?.email ? getUserByEmail(session.email) : null
+    if (user) {
+      redirectToPage('dashboard')
+      return
+    }
+
+    root.innerHTML = renderAuthView()
+    bindAuthForm()
+  }
+
+  return { init }
+}
+
+export function createDashboardPage(root) {
   let state = {
     user: null,
     hydratedAssets: [],
     chart: null,
     editingAssetId: null,
     assetLookupToken: 0,
-    currentView: 'dashboard',
-    traderType: 'Ações',
-    traderQuery: '',
-    traderResults: [],
-    traderAssets: [],
-    activeTraderAssetId: null,
-    traderDateFrom: defaultTraderStart,
-    traderDateTo: today,
-    traderPreset: '1D',
-    traderStatus: 'Busque um ticker ou nome para carregar ativos direto das APIs.',
     assetFormState: {
       syncing: false,
       manualField: null,
@@ -66,22 +175,6 @@ export function createApp(root) {
     },
   }
   let globalActionsBound = false
-
-  function normalizeAssetType(type) {
-    return LEGACY_ASSET_TYPE_MAP[type] || type
-  }
-
-  function normalizeAsset(asset) {
-    return {
-      ...asset,
-      type: normalizeAssetType(asset.type),
-      symbol: sanitizeText(asset.symbol).toUpperCase(),
-    }
-  }
-
-  function getTypeRule(type) {
-    return ASSET_TYPE_RULES[normalizeAssetType(type)] || ASSET_TYPE_RULES['Renda Fixa']
-  }
 
   function getAssetFormElements() {
     return {
@@ -99,27 +192,9 @@ export function createApp(root) {
     }
   }
 
-  function validateAssetSymbol(type, symbol) {
-    const rule = getTypeRule(type)
-    return rule.symbolPattern.test(symbol)
-      ? ''
-      : rule.symbolError
-  }
-
-  function normalizeSymbolInput(type, symbol) {
-    const trimmed = sanitizeText(symbol)
-    if (!trimmed) return ''
-
-    if (type === 'Criptomoedas') {
-      return trimmed.replace(/\s+/g, '').replace(/_/g, '-')
-    }
-
-    return trimmed.toUpperCase().replace(/\s+/g, '')
-  }
-
   function updateSymbolValidationState() {
-    const { typeSelect, symbolInput, hint, status } = getAssetFormElements()
-    if (!typeSelect || !symbolInput || !hint || !status) return
+    const { typeSelect, symbolInput, status } = getAssetFormElements()
+    if (!typeSelect || !symbolInput || !status) return
 
     const normalizedSymbol = normalizeSymbolInput(typeSelect.value, symbolInput.value)
     if (symbolInput.value !== normalizedSymbol) {
@@ -149,6 +224,21 @@ export function createApp(root) {
     status.className = 'mt-2 text-xs leading-5 text-emerald-300'
   }
 
+  function setAutofillStatus(message, tone = 'neutral') {
+    const { autofillStatus } = getAssetFormElements()
+    if (!autofillStatus) return
+
+    const toneMap = {
+      neutral: 'text-zinc-500',
+      loading: 'text-cyan-300',
+      success: 'text-emerald-300',
+      error: 'text-rose-300',
+    }
+
+    autofillStatus.textContent = message
+    autofillStatus.className = `min-h-5 text-xs leading-5 ${toneMap[tone] || toneMap.neutral}`
+  }
+
   function syncAssetFormHint() {
     const { typeSelect, symbolInput, hint } = getAssetFormElements()
     if (!typeSelect || !symbolInput || !hint) return
@@ -173,43 +263,6 @@ export function createApp(root) {
     )
   }
 
-  function setAutofillStatus(message, tone = 'neutral') {
-    const { autofillStatus } = getAssetFormElements()
-    if (!autofillStatus) return
-
-    const toneMap = {
-      neutral: 'text-zinc-500',
-      loading: 'text-cyan-300',
-      success: 'text-emerald-300',
-      error: 'text-rose-300',
-    }
-
-    autofillStatus.textContent = message
-    autofillStatus.className = `min-h-5 text-xs leading-5 ${toneMap[tone] || toneMap.neutral}`
-  }
-
-  function getAutofillProviderLabels(type) {
-    if (type === 'Criptomoedas') return ['CoinGecko']
-    if (type === 'Ações' || type === 'FIIs' || type === 'BDRs' || type === 'ETFs') {
-      return ['BrAPI', 'Twelve Data', 'Alpha Vantage']
-    }
-    if (type === 'Ações Internacionais') return ['Twelve Data', 'Alpha Vantage']
-    return []
-  }
-
-  function getQuoteSourceLabel(source) {
-    return QUOTE_SOURCE_META[source]?.label || source || 'API'
-  }
-
-  function getNumericInputValue(input) {
-    return input ? Number(input.value || 0) : 0
-  }
-
-  function setInputValue(input, value, decimals = 4) {
-    if (!input) return
-    input.value = Number.isFinite(value) && value > 0 ? value.toFixed(decimals) : ''
-  }
-
   function resetAssetFormSync() {
     state = {
       ...state,
@@ -229,7 +282,6 @@ export function createApp(root) {
 
     const allowManualOverride = options.allowManualOverride === true
     const manualField = state.assetFormState.manualField
-
     if (!allowManualOverride && manualField) return
 
     state = {
@@ -291,15 +343,14 @@ export function createApp(root) {
       marketValueInput,
       quantityInput,
     } = getAssetFormElements()
-    if (!details) return
-    const selectedType = normalizeAssetType(typeSelect?.value)
+    if (!details || !typeSelect) return
+
+    const selectedType = normalizeAssetType(typeSelect.value)
 
     if (symbolInput && details.symbol) {
       symbolInput.value = normalizeSymbolInput(selectedType, details.symbol)
     }
-    if (nameInput && details.name && !sanitizeText(nameInput.value)) {
-      nameInput.value = details.name
-    } else if (nameInput && details.name) {
+    if (nameInput && details.name) {
       nameInput.value = details.name
     }
     if (marketPriceInput && details.currentPrice > 0) {
@@ -402,8 +453,7 @@ export function createApp(root) {
 
   function getFilteredAssets(assets) {
     return assets.filter((asset) => {
-      const matchesType =
-        state.filters.type === 'Todos' ? true : asset.type === state.filters.type
+      const matchesType = state.filters.type === 'Todos' || asset.type === state.filters.type
 
       let matchesPerformance = true
       if (state.filters.performance === 'Positivos') matchesPerformance = asset.variation > 0
@@ -496,342 +546,11 @@ export function createApp(root) {
     })
   }
 
-  function renderTraderChart(selectedAssets) {
-    destroyChart()
-    const canvas = root.querySelector('#trader-chart')
-    const legend = root.querySelector('#trader-legend')
-    if (!canvas || !legend) return
-
-    const activeAsset =
-      selectedAssets.find((asset) => asset.id === state.activeTraderAssetId) || selectedAssets[0]
-
-    const series = selectedAssets.map((asset, index) => ({
-      ...asset,
-      color: CHART_COLORS[index % CHART_COLORS.length],
-    }))
-
-    legend.innerHTML = renderTraderLegend(series)
-
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    const dpr = window.devicePixelRatio || 1
-    const width = canvas.clientWidth || canvas.parentElement?.clientWidth || 1200
-    const height = canvas.clientHeight || canvas.parentElement?.clientHeight || 620
-    canvas.width = width * dpr
-    canvas.height = height * dpr
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    ctx.clearRect(0, 0, width, height)
-    ctx.fillStyle = '#071321'
-    ctx.fillRect(0, 0, width, height)
-
-    if (!activeAsset?.series?.candles?.length) {
-      ctx.fillStyle = 'rgba(228,228,231,0.85)'
-      ctx.font = '600 18px sans-serif'
-      ctx.textAlign = 'center'
-      ctx.fillText('Serie indisponivel para o periodo selecionado', width / 2, height / 2 - 8)
-      ctx.fillStyle = 'rgba(161,161,170,0.78)'
-      ctx.font = '13px sans-serif'
-      ctx.fillText('Ajuste o intervalo ou selecione outro provedor/ativo.', width / 2, height / 2 + 20)
-      return
-    }
-
-    const candles = activeAsset.series.candles
-    const prices = candles.flatMap((candle) => [candle.high, candle.low])
-    const maxPrice = Math.max(...prices)
-    const minPrice = Math.min(...prices)
-    const range = Math.max(maxPrice - minPrice, 0.0001)
-    const padding = { top: 24, right: 88, bottom: 48, left: 20 }
-    const chartWidth = width - padding.left - padding.right
-    const chartHeight = height - padding.top - padding.bottom
-    const step = chartWidth / candles.length
-    const candleWidth = Math.max(Math.min(step * 0.42, 16), 5)
-
-    const toY = (price) => padding.top + ((maxPrice - price) / range) * chartHeight
-
-    ctx.strokeStyle = 'rgba(255,255,255,0.07)'
-    ctx.lineWidth = 1
-    for (let i = 0; i <= 5; i += 1) {
-      const y = padding.top + (chartHeight / 5) * i
-      ctx.beginPath()
-      ctx.moveTo(padding.left, y)
-      ctx.lineTo(width - padding.right, y)
-      ctx.stroke()
-    }
-
-    ctx.font = '12px sans-serif'
-    ctx.fillStyle = 'rgba(228,228,231,0.72)'
-    ctx.textAlign = 'left'
-    ctx.fillText(`${activeAsset.name} (${activeAsset.symbol})`, padding.left, 16)
-    ctx.textAlign = 'right'
-    ctx.fillText(activeAsset.quoteSourceLabel || activeAsset.source || 'API', width - padding.right, 16)
-
-    for (let i = 0; i <= 5; i += 1) {
-      const ratio = i / 5
-      const price = maxPrice - range * ratio
-      const y = padding.top + chartHeight * ratio
-      ctx.fillStyle = 'rgba(228,228,231,0.64)'
-      ctx.textAlign = 'left'
-      ctx.fillText(
-        price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-        width - padding.right + 12,
-        y + 4,
-      )
-    }
-
-    candles.forEach((candle, index) => {
-      const x = padding.left + step * index + step / 2
-      const openY = toY(candle.open)
-      const closeY = toY(candle.close)
-      const highY = toY(candle.high)
-      const lowY = toY(candle.low)
-      const previousClose = Number(candles[Math.max(index - 1, 0)]?.close || candle.open)
-      const positive = index === 0 ? candle.close >= candle.open : candle.close >= previousClose
-      const color = positive ? '#34d399' : '#fb7185'
-
-      ctx.strokeStyle = color
-      ctx.lineWidth = 1.4
-      ctx.beginPath()
-      ctx.moveTo(x, highY)
-      ctx.lineTo(x, lowY)
-      ctx.stroke()
-
-      const bodyTop = Math.min(openY, closeY)
-      const bodyHeight = Math.max(Math.abs(closeY - openY), 2)
-      ctx.fillStyle = color
-      ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight)
-    })
-
-    ctx.strokeStyle = 'rgba(255,255,255,0.1)'
-    ctx.beginPath()
-    ctx.moveTo(padding.left, height - padding.bottom)
-    ctx.lineTo(width - padding.right, height - padding.bottom)
-    ctx.stroke()
-
-    const labelStep = Math.max(Math.floor(candles.length / 8), 1)
-    ctx.fillStyle = 'rgba(228,228,231,0.64)'
-    ctx.textAlign = 'center'
-    candles.forEach((candle, index) => {
-      if (index % labelStep !== 0 && index !== candles.length - 1) return
-      const x = padding.left + step * index + step / 2
-      ctx.fillText(candle.label, x, height - 18)
-    })
-  }
-
-  async function runTraderSearch(query, type) {
-    const normalizedQuery = sanitizeText(query)
-    if (!normalizedQuery) {
-      state = {
-        ...state,
-        traderQuery: '',
-        traderResults: [],
-        traderPreset: state.traderPreset,
-        traderStatus: 'Digite um ticker ou nome para consultar os ativos nas APIs.',
-      }
-      render()
-      return
-    }
-
-    state = {
-      ...state,
-      traderQuery: normalizedQuery,
-      traderType: type,
-      traderPreset: state.traderPreset,
-      traderStatus: `Buscando ativos de ${type} nas APIs...`,
-    }
-    render()
-
-    const results = await searchTraderAssets({
-      query: normalizedQuery,
-      type,
-    })
-
-    state = {
-      ...state,
-      traderQuery: normalizedQuery,
-      traderType: type,
-      traderResults: results,
-      traderPreset: state.traderPreset,
-      traderStatus: results.length
-        ? `${results.length} ativo(s) encontrado(s) em provedores de mercado.`
-        : `Nenhum ativo encontrado para ${normalizedQuery} em ${type}.`,
-    }
-    render()
-  }
-
-  async function loadTraderAssetSeries(asset) {
-    const quote = await fetchAssetQuote({
-      symbol: asset.symbol,
-      type: asset.type,
-    })
-    const series = await fetchTraderSeries({
-      symbol: asset.symbol,
-      type: asset.type,
-      providerId: asset.providerId,
-      currentPrice: Number(quote.price || asset.currentPrice || 0),
-      variation: Number(quote.variation || asset.variation || 0),
-      dateFrom: state.traderDateFrom,
-      dateTo: state.traderDateTo,
-    })
-    const seriesCandles = Array.isArray(series?.candles) ? series.candles : []
-    const periodOpen = Number(seriesCandles[0]?.open || 0)
-    const periodHigh = seriesCandles.length
-      ? Math.max(...seriesCandles.map((candle) => Number(candle.high || 0)))
-      : 0
-    const periodLow = seriesCandles.length
-      ? Math.min(...seriesCandles.map((candle) => Number(candle.low || 0)).filter((value) => value > 0))
-      : 0
-    const firstSeriesClose = Number(seriesCandles[0]?.close || 0)
-    const lastSeriesClose = Number(seriesCandles[seriesCandles.length - 1]?.close || 0)
-    const periodVariation =
-      firstSeriesClose > 0 ? (lastSeriesClose - firstSeriesClose) / firstSeriesClose : 0
-    const displayedPrice = lastSeriesClose || 0
-    const displayedVariation = seriesCandles.length > 1 ? periodVariation : 0
-    const displaySource = series?.source || null
-
-    return {
-      ...asset,
-      currentPrice: displayedPrice,
-      variation: displayedVariation,
-      quoteSource: displaySource,
-      quoteSourceLabel: displaySource ? QUOTE_SOURCE_META[displaySource]?.label || displaySource : 'Serie indisponivel',
-      periodOpen,
-      periodHigh,
-      periodLow,
-      periodClose: lastSeriesClose || displayedPrice,
-      series,
-      seriesError: !series,
-      usedCachedSeries: Boolean(series?.fromCache),
-    }
-  }
-
-  async function reloadTraderAssetsForPeriod() {
-    if (!state.traderAssets.length) {
-      state = {
-        ...state,
-        traderStatus: 'Defina um periodo e selecione ao menos um ativo para carregar a serie.',
-      }
-      render()
-      return
-    }
-
-    state = {
-      ...state,
-      traderStatus: `Atualizando series entre ${state.traderDateFrom} e ${state.traderDateTo}...`,
-    }
-    render()
-
-    const reloadedAssets = await Promise.all(state.traderAssets.map((asset) => loadTraderAssetSeries(asset)))
-    state = {
-      ...state,
-      traderAssets: reloadedAssets,
-      activeTraderAssetId:
-        reloadedAssets.find((asset) => asset.id === state.activeTraderAssetId)?.id ||
-        reloadedAssets[0]?.id ||
-        null,
-      traderStatus: reloadedAssets.some((asset) => asset.seriesError)
-        ? 'Alguns ativos nao retornaram serie para esse periodo.'
-        : reloadedAssets.some((asset) => asset.usedCachedSeries)
-          ? 'Periodo aplicado. Parte das series veio do cache local para manter estabilidade.'
-        : 'Periodo aplicado ao candle chart.',
-    }
-    render()
-  }
-
-  function resolveTraderPresetDates(preset) {
-    const days = traderPresetOptions[preset] || 1
-    const dateTo = new Date()
-    const dateFrom = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
-    return {
-      traderDateFrom: dateFrom.toISOString().slice(0, 10),
-      traderDateTo: dateTo.toISOString().slice(0, 10),
-    }
-  }
-
-  async function toggleTraderAssetSelection(assetId, checked) {
-    const selectedAsset = state.traderResults.find((asset) => asset.id === assetId)
-    if (!selectedAsset) return
-
-    if (!checked) {
-      const remainingAssets = state.traderAssets.filter((asset) => asset.id !== assetId)
-      state = {
-        ...state,
-        traderAssets: remainingAssets,
-        activeTraderAssetId:
-          state.activeTraderAssetId === assetId ? remainingAssets[0]?.id || null : state.activeTraderAssetId,
-        traderStatus: 'Ativo removido do painel trader.',
-      }
-      render()
-      return
-    }
-
-    if (state.traderAssets.some((asset) => asset.id === assetId)) return
-
-    state = {
-      ...state,
-      traderStatus: `Carregando serie de preco para ${selectedAsset.symbol}...`,
-    }
-    render()
-
-    const enrichedAsset = await loadTraderAssetSeries(selectedAsset)
-    state = {
-      ...state,
-      traderAssets: [...state.traderAssets, enrichedAsset],
-      activeTraderAssetId: state.activeTraderAssetId || enrichedAsset.id,
-      traderStatus: `Serie carregada para ${selectedAsset.symbol} via ${enrichedAsset.series?.source === 'fallback' ? 'fallback visual' : enrichedAsset.quoteSourceLabel || 'API'}.`,
-    }
-    render()
-  }
-
-  function bindAuthForm() {
-    const form = root.querySelector('#login-form')
-    if (!form) return
-
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault()
-      const feedback = root.querySelector('#auth-feedback')
-      const formData = new FormData(form)
-      const email = sanitizeText(formData.get('email')).toLowerCase()
-      const password = sanitizeText(formData.get('password'))
-
-      if (!email.includes('@')) {
-        feedback.textContent = 'Informe um e-mail valido.'
-        return
-      }
-
-      if (password.length < 6) {
-        feedback.textContent = 'A senha deve ter pelo menos 6 caracteres.'
-        return
-      }
-
-      const existingUser = getUserByEmail(email)
-      if (existingUser && existingUser.password !== password) {
-        feedback.textContent = 'Senha incorreta para esta conta local.'
-        return
-      }
-
-      const user =
-        existingUser ||
-        upsertUser({
-          email,
-          password,
-          portfolio: [],
-          createdAt: new Date().toISOString(),
-        })
-
-      createSession(email)
-      feedback.textContent = 'Carregando carteira...'
-      await hydratePortfolio(user)
-      render()
-    })
-  }
-
   function bindDashboardActions() {
     const assetForm = root.querySelector('#asset-form')
     const filtersForm = root.querySelector('#filters-form')
     const feedback = root.querySelector('#portfolio-feedback')
-    const { symbolInput, nameInput, quantityInput, marketValueInput, marketPriceInput } =
-      getAssetFormElements()
+    const { symbolInput, nameInput, marketPriceInput } = getAssetFormElements()
 
     syncAssetFormHint()
     resetAssetFormSync()
@@ -940,7 +659,8 @@ export function createApp(root) {
       }
 
       if (asset.quantity <= 0 || asset.marketValue === 0) {
-        feedback.textContent = 'Quantidade deve ser maior que zero e o valor de mercado nao pode ser zero.'
+        feedback.textContent =
+          'Quantidade deve ser maior que zero e o valor de mercado nao pode ser zero.'
         return
       }
 
@@ -988,22 +708,7 @@ export function createApp(root) {
       if (action === 'logout') {
         clearSession()
         destroyChart()
-        state = {
-          ...state,
-          user: null,
-          hydratedAssets: [],
-          editingAssetId: null,
-          currentView: 'dashboard',
-          traderQuery: '',
-          traderResults: [],
-        traderAssets: [],
-        activeTraderAssetId: null,
-        traderDateFrom: defaultTraderStart,
-        traderDateTo: today,
-        traderPreset: '1D',
-        traderStatus: 'Busque um ticker ou nome para carregar ativos direto das APIs.',
-      }
-        render()
+        redirectToPage('login')
         return
       }
 
@@ -1013,15 +718,6 @@ export function createApp(root) {
         if (feedback) feedback.textContent = 'Buscando cotacoes mais recentes...'
         await hydratePortfolio(getUserByEmail(state.user.email))
         render()
-        return
-      }
-
-      if (action === 'navigate') {
-        const nextView = target.dataset.view
-        if (nextView === 'dashboard' || nextView === 'trader') {
-          state = { ...state, currentView: nextView }
-          render()
-        }
         return
       }
 
@@ -1046,6 +742,373 @@ export function createApp(root) {
           editingAssetId: state.editingAssetId === assetId ? null : state.editingAssetId,
         }
         render()
+      }
+    })
+  }
+
+  function render() {
+    const filteredAssets = getFilteredAssets(state.hydratedAssets)
+    const summary = getSummary(filteredAssets)
+    const allocation = getAllocation(filteredAssets)
+
+    root.innerHTML = renderDashboardView({
+      user: state.user,
+      summary,
+      assets: filteredAssets,
+      totalAssetsCount: state.hydratedAssets.length,
+      filters: state.filters,
+      editingAsset: getEditingAsset(),
+      currentPage: 'dashboard',
+    })
+    renderChart(allocation)
+    bindDashboardActions()
+  }
+
+  async function init() {
+    const user = requireAuthenticatedUser()
+    if (!user) return
+
+    await hydratePortfolio(user)
+    render()
+  }
+
+  return { init }
+}
+
+export function createTraderPage(root) {
+  const today = new Date().toISOString().slice(0, 10)
+  const defaultTraderStart = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10)
+  const traderPresetOptions = {
+    '1D': 1,
+    '1W': 7,
+    '1M': 30,
+    '3M': 90,
+  }
+
+  let state = {
+    user: null,
+    traderType: 'Ações',
+    traderQuery: '',
+    traderResults: [],
+    traderAssets: [],
+    activeTraderAssetId: null,
+    traderDateFrom: defaultTraderStart,
+    traderDateTo: today,
+    traderPreset: '1D',
+    traderStatus: 'Busque um ticker ou nome para carregar ativos direto das APIs.',
+  }
+  let globalActionsBound = false
+
+  function renderTraderChart(selectedAssets) {
+    const canvas = root.querySelector('#trader-chart')
+    const legend = root.querySelector('#trader-legend')
+    if (!canvas || !legend) return
+
+    const activeAsset =
+      selectedAssets.find((asset) => asset.id === state.activeTraderAssetId) || selectedAssets[0]
+
+    const series = selectedAssets.map((asset, index) => ({
+      ...asset,
+      color: CHART_COLORS[index % CHART_COLORS.length],
+    }))
+
+    legend.innerHTML = renderTraderLegend(series)
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const dpr = window.devicePixelRatio || 1
+    const width = canvas.clientWidth || canvas.parentElement?.clientWidth || 1200
+    const height = canvas.clientHeight || canvas.parentElement?.clientHeight || 620
+    canvas.width = width * dpr
+    canvas.height = height * dpr
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.clearRect(0, 0, width, height)
+    ctx.fillStyle = '#071321'
+    ctx.fillRect(0, 0, width, height)
+
+    if (!activeAsset?.series?.candles?.length) {
+      ctx.fillStyle = 'rgba(228,228,231,0.85)'
+      ctx.font = '600 18px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('Serie indisponivel para o periodo selecionado', width / 2, height / 2 - 8)
+      ctx.fillStyle = 'rgba(161,161,170,0.78)'
+      ctx.font = '13px sans-serif'
+      ctx.fillText(
+        'Ajuste o intervalo ou selecione outro provedor/ativo.',
+        width / 2,
+        height / 2 + 20,
+      )
+      return
+    }
+
+    const candles = activeAsset.series.candles
+    const prices = candles.flatMap((candle) => [candle.high, candle.low])
+    const maxPrice = Math.max(...prices)
+    const minPrice = Math.min(...prices)
+    const range = Math.max(maxPrice - minPrice, 0.0001)
+    const padding = { top: 24, right: 88, bottom: 48, left: 20 }
+    const chartWidth = width - padding.left - padding.right
+    const chartHeight = height - padding.top - padding.bottom
+    const step = chartWidth / candles.length
+    const candleWidth = Math.max(Math.min(step * 0.42, 16), 5)
+
+    const toY = (price) => padding.top + ((maxPrice - price) / range) * chartHeight
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)'
+    ctx.lineWidth = 1
+    for (let i = 0; i <= 5; i += 1) {
+      const y = padding.top + (chartHeight / 5) * i
+      ctx.beginPath()
+      ctx.moveTo(padding.left, y)
+      ctx.lineTo(width - padding.right, y)
+      ctx.stroke()
+    }
+
+    ctx.font = '12px sans-serif'
+    ctx.fillStyle = 'rgba(228,228,231,0.72)'
+    ctx.textAlign = 'left'
+    ctx.fillText(`${activeAsset.name} (${activeAsset.symbol})`, padding.left, 16)
+    ctx.textAlign = 'right'
+    ctx.fillText(activeAsset.quoteSourceLabel || activeAsset.source || 'API', width - padding.right, 16)
+
+    for (let i = 0; i <= 5; i += 1) {
+      const ratio = i / 5
+      const price = maxPrice - range * ratio
+      const y = padding.top + chartHeight * ratio
+      ctx.fillStyle = 'rgba(228,228,231,0.64)'
+      ctx.textAlign = 'left'
+      ctx.fillText(
+        price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+        width - padding.right + 12,
+        y + 4,
+      )
+    }
+
+    candles.forEach((candle, index) => {
+      const x = padding.left + step * index + step / 2
+      const openY = toY(candle.open)
+      const closeY = toY(candle.close)
+      const highY = toY(candle.high)
+      const lowY = toY(candle.low)
+      const previousClose = Number(candles[Math.max(index - 1, 0)]?.close || candle.open)
+      const positive = index === 0 ? candle.close >= candle.open : candle.close >= previousClose
+      const color = positive ? '#34d399' : '#fb7185'
+
+      ctx.strokeStyle = color
+      ctx.lineWidth = 1.4
+      ctx.beginPath()
+      ctx.moveTo(x, highY)
+      ctx.lineTo(x, lowY)
+      ctx.stroke()
+
+      const bodyTop = Math.min(openY, closeY)
+      const bodyHeight = Math.max(Math.abs(closeY - openY), 2)
+      ctx.fillStyle = color
+      ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight)
+    })
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)'
+    ctx.beginPath()
+    ctx.moveTo(padding.left, height - padding.bottom)
+    ctx.lineTo(width - padding.right, height - padding.bottom)
+    ctx.stroke()
+
+    const labelStep = Math.max(Math.floor(candles.length / 8), 1)
+    ctx.fillStyle = 'rgba(228,228,231,0.64)'
+    ctx.textAlign = 'center'
+    candles.forEach((candle, index) => {
+      if (index % labelStep !== 0 && index !== candles.length - 1) return
+      const x = padding.left + step * index + step / 2
+      ctx.fillText(candle.label, x, height - 18)
+    })
+  }
+
+  async function runTraderSearch(query, type) {
+    const normalizedQuery = sanitizeText(query)
+    if (!normalizedQuery) {
+      state = {
+        ...state,
+        traderQuery: '',
+        traderResults: [],
+        traderStatus: 'Digite um ticker ou nome para consultar os ativos nas APIs.',
+      }
+      render()
+      return
+    }
+
+    state = {
+      ...state,
+      traderQuery: normalizedQuery,
+      traderType: type,
+      traderStatus: `Buscando ativos de ${type} nas APIs...`,
+    }
+    render()
+
+    const results = await searchTraderAssets({
+      query: normalizedQuery,
+      type,
+    })
+
+    state = {
+      ...state,
+      traderQuery: normalizedQuery,
+      traderType: type,
+      traderResults: results,
+      traderStatus: results.length
+        ? `${results.length} ativo(s) encontrado(s) em provedores de mercado.`
+        : `Nenhum ativo encontrado para ${normalizedQuery} em ${type}.`,
+    }
+    render()
+  }
+
+  async function loadTraderAssetSeries(asset) {
+    const quote = await fetchAssetQuote({
+      symbol: asset.symbol,
+      type: asset.type,
+    })
+    const series = await fetchTraderSeries({
+      symbol: asset.symbol,
+      type: asset.type,
+      providerId: asset.providerId,
+      currentPrice: Number(quote.price || asset.currentPrice || 0),
+      variation: Number(quote.variation || asset.variation || 0),
+      dateFrom: state.traderDateFrom,
+      dateTo: state.traderDateTo,
+    })
+    const seriesCandles = Array.isArray(series?.candles) ? series.candles : []
+    const periodOpen = Number(seriesCandles[0]?.open || 0)
+    const periodHigh = seriesCandles.length
+      ? Math.max(...seriesCandles.map((candle) => Number(candle.high || 0)))
+      : 0
+    const periodLow = seriesCandles.length
+      ? Math.min(...seriesCandles.map((candle) => Number(candle.low || 0)).filter((value) => value > 0))
+      : 0
+    const firstSeriesClose = Number(seriesCandles[0]?.close || 0)
+    const lastSeriesClose = Number(seriesCandles[seriesCandles.length - 1]?.close || 0)
+    const periodVariation =
+      firstSeriesClose > 0 ? (lastSeriesClose - firstSeriesClose) / firstSeriesClose : 0
+    const displayedPrice = lastSeriesClose || 0
+    const displayedVariation = seriesCandles.length > 1 ? periodVariation : 0
+    const displaySource = series?.source || null
+
+    return {
+      ...asset,
+      currentPrice: displayedPrice,
+      variation: displayedVariation,
+      quoteSource: displaySource,
+      quoteSourceLabel: displaySource
+        ? QUOTE_SOURCE_META[displaySource]?.label || displaySource
+        : 'Serie indisponivel',
+      periodOpen,
+      periodHigh,
+      periodLow,
+      periodClose: lastSeriesClose || displayedPrice,
+      series,
+      seriesError: !series,
+      usedCachedSeries: Boolean(series?.fromCache),
+    }
+  }
+
+  async function reloadTraderAssetsForPeriod() {
+    if (!state.traderAssets.length) {
+      state = {
+        ...state,
+        traderStatus: 'Defina um periodo e selecione ao menos um ativo para carregar a serie.',
+      }
+      render()
+      return
+    }
+
+    state = {
+      ...state,
+      traderStatus: `Atualizando series entre ${state.traderDateFrom} e ${state.traderDateTo}...`,
+    }
+    render()
+
+    const reloadedAssets = await Promise.all(
+      state.traderAssets.map((asset) => loadTraderAssetSeries(asset)),
+    )
+    state = {
+      ...state,
+      traderAssets: reloadedAssets,
+      activeTraderAssetId:
+        reloadedAssets.find((asset) => asset.id === state.activeTraderAssetId)?.id ||
+        reloadedAssets[0]?.id ||
+        null,
+      traderStatus: reloadedAssets.some((asset) => asset.seriesError)
+        ? 'Alguns ativos nao retornaram serie para esse periodo.'
+        : reloadedAssets.some((asset) => asset.usedCachedSeries)
+          ? 'Periodo aplicado. Parte das series veio do cache local para manter estabilidade.'
+          : 'Periodo aplicado ao candle chart.',
+    }
+    render()
+  }
+
+  function resolveTraderPresetDates(preset) {
+    const days = traderPresetOptions[preset] || 1
+    const dateTo = new Date()
+    const dateFrom = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+    return {
+      traderDateFrom: dateFrom.toISOString().slice(0, 10),
+      traderDateTo: dateTo.toISOString().slice(0, 10),
+    }
+  }
+
+  async function toggleTraderAssetSelection(assetId, checked) {
+    const selectedAsset = state.traderResults.find((asset) => asset.id === assetId)
+    if (!selectedAsset) return
+
+    if (!checked) {
+      const remainingAssets = state.traderAssets.filter((asset) => asset.id !== assetId)
+      state = {
+        ...state,
+        traderAssets: remainingAssets,
+        activeTraderAssetId:
+          state.activeTraderAssetId === assetId ? remainingAssets[0]?.id || null : state.activeTraderAssetId,
+        traderStatus: 'Ativo removido do painel trader.',
+      }
+      render()
+      return
+    }
+
+    if (state.traderAssets.some((asset) => asset.id === assetId)) return
+
+    state = {
+      ...state,
+      traderStatus: `Carregando serie de preco para ${selectedAsset.symbol}...`,
+    }
+    render()
+
+    const enrichedAsset = await loadTraderAssetSeries(selectedAsset)
+    state = {
+      ...state,
+      traderAssets: [...state.traderAssets, enrichedAsset],
+      activeTraderAssetId: state.activeTraderAssetId || enrichedAsset.id,
+      traderStatus: `Serie carregada para ${selectedAsset.symbol} via ${
+        enrichedAsset.series?.source === 'fallback'
+          ? 'fallback visual'
+          : enrichedAsset.quoteSourceLabel || 'API'
+      }.`,
+    }
+    render()
+  }
+
+  function bindGlobalActions() {
+    if (globalActionsBound) return
+    globalActionsBound = true
+
+    root.addEventListener('click', async (event) => {
+      const target = event.target.closest('[data-action]')
+      if (!target) return
+
+      const { action, assetId } = target.dataset
+
+      if (action === 'logout') {
+        clearSession()
+        redirectToPage('login')
         return
       }
 
@@ -1141,58 +1204,29 @@ export function createApp(root) {
   }
 
   function render() {
-    if (!state.user) {
-      destroyChart()
-      root.innerHTML = renderAuthView()
-      bindAuthForm()
-      return
-    }
-
-    const filteredAssets = getFilteredAssets(state.hydratedAssets)
-    const summary = getSummary(filteredAssets)
-    const allocation = getAllocation(filteredAssets)
-    if (state.currentView === 'trader') {
-      root.innerHTML = renderTraderView({
-        user: state.user,
-        currentView: state.currentView,
-        traderType: state.traderType,
-        traderQuery: state.traderQuery,
-        traderResults: state.traderResults,
-        selectedAssets: state.traderAssets,
-        activeTraderAssetId: state.activeTraderAssetId,
-        traderDateFrom: state.traderDateFrom,
-        traderDateTo: state.traderDateTo,
-        traderPreset: state.traderPreset,
-        traderStatus: state.traderStatus,
-        selectedAssetsCount: state.traderAssets.length,
-      })
-      renderTraderChart(state.traderAssets)
-      bindTraderActions()
-      return
-    }
-
-    root.innerHTML = renderDashboardView({
+    root.innerHTML = renderTraderView({
       user: state.user,
-      summary,
-      assets: filteredAssets,
-      totalAssetsCount: state.hydratedAssets.length,
-      filters: state.filters,
-      editingAsset: getEditingAsset(),
-      currentView: state.currentView,
+      currentPage: 'trader',
+      traderType: state.traderType,
+      traderQuery: state.traderQuery,
+      traderResults: state.traderResults,
+      selectedAssets: state.traderAssets,
+      activeTraderAssetId: state.activeTraderAssetId,
+      traderDateFrom: state.traderDateFrom,
+      traderDateTo: state.traderDateTo,
+      traderPreset: state.traderPreset,
+      traderStatus: state.traderStatus,
+      selectedAssetsCount: state.traderAssets.length,
     })
-    renderChart(allocation)
-    bindDashboardActions()
+    renderTraderChart(state.traderAssets)
+    bindTraderActions()
   }
 
-  async function init() {
-    const session = getSession()
-    if (session?.email) {
-      const user = getUserByEmail(session.email)
-      if (user) {
-        await hydratePortfolio(user)
-      }
-    }
+  function init() {
+    const user = requireAuthenticatedUser()
+    if (!user) return
 
+    state = { ...state, user }
     render()
   }
 
