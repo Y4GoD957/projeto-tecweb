@@ -1,3 +1,4 @@
+import { Check, RefreshCcw, X } from 'lucide-react'
 import FormField from '@/components/ui/form-field.jsx'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -34,12 +35,17 @@ export default function AssetForm({
       <p className="min-h-5 text-xs leading-5 text-zinc-500 md:col-span-2">
         {autofillStatus || (providers.length ? `Autopreenchimento disponivel via ${providers.join(', ')}.` : 'Preenchimento manual para este tipo.')}
       </p>
-      <Button type="submit" size="lg">{editingId ? 'Salvar ativo' : 'Adicionar ativo'}</Button>
+      <Button type="submit" size="lg">
+        <Check aria-hidden="true" className="size-4" />
+        {editingId ? 'Salvar ativo' : 'Adicionar ativo'}
+      </Button>
       <Button type="button" variant="outline" size="lg" onClick={onRefresh} disabled={loading}>
+        <RefreshCcw aria-hidden="true" className="size-4" />
         {loading ? 'Atualizando...' : 'Atualizar cotacoes'}
       </Button>
       {editingId ? (
         <Button type="button" variant="secondary" size="lg" className="md:col-span-2" onClick={onCancel}>
+          <X aria-hidden="true" className="size-4" />
           Cancelar edicao
         </Button>
       ) : null}

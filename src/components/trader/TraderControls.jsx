@@ -1,3 +1,4 @@
+import { CalendarCheck, Search } from 'lucide-react'
 import FormField from '@/components/ui/form-field.jsx'
 import { Button } from '@/components/ui/button'
 
@@ -19,7 +20,10 @@ export default function TraderControls({
           {['Ações', 'FIIs', 'BDRs', 'ETFs', 'Ações Internacionais', 'Criptomoedas'].map((type) => <option key={type} value={type}>{type}</option>)}
         </FormField>
         <FormField label="Buscar ativo" name="traderQuery" value={search.traderQuery} onChange={(event) => setSearch((current) => ({ ...current, traderQuery: event.target.value }))} placeholder="Digite nome ou ticker" required />
-        <Button type="submit" size="lg" disabled={loading}>{loading ? 'Buscando...' : 'Buscar'}</Button>
+        <Button type="submit" size="lg" disabled={loading}>
+          <Search aria-hidden="true" className="size-4" />
+          {loading ? 'Buscando...' : 'Buscar'}
+        </Button>
       </form>
 
       <form className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end" autoComplete="off" onSubmit={onPeriodSubmit}>
@@ -32,7 +36,10 @@ export default function TraderControls({
         </div>
         <FormField label="Data inicial" name="from" type="date" value={period.from} onChange={(event) => setPeriod((current) => ({ ...current, from: event.target.value }))} required />
         <FormField label="Data final" name="to" type="date" value={period.to} onChange={(event) => setPeriod((current) => ({ ...current, to: event.target.value }))} required />
-        <Button type="submit" variant="secondary" size="lg" disabled={loading}>Aplicar periodo</Button>
+        <Button type="submit" variant="secondary" size="lg" disabled={loading}>
+          <CalendarCheck aria-hidden="true" className="size-4" />
+          Aplicar periodo
+        </Button>
       </form>
     </div>
   )

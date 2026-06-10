@@ -1,3 +1,4 @@
+import { Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { TYPE_BADGES } from '@/lib/constants'
@@ -51,8 +52,14 @@ export default function AssetList({ assets, onEdit, onDelete }) {
               <p className={`mt-1 text-lg font-medium ${getVariationTone(asset.variation)}`}>{formatPercent(asset.variation)}</p>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
-              <Button type="button" variant="outline" size="lg" onClick={() => onEdit(asset)}>Editar</Button>
-              <Button type="button" variant="destructive" size="lg" onClick={() => onDelete(asset.id)}>Remover</Button>
+              <Button type="button" variant="outline" size="lg" onClick={() => onEdit(asset)}>
+                <Pencil aria-hidden="true" className="size-4" />
+                Editar
+              </Button>
+              <Button type="button" variant="destructive" size="lg" onClick={() => onDelete(asset.id)}>
+                <Trash2 aria-hidden="true" className="size-4" />
+                Remover
+              </Button>
             </div>
           </article>
         ))}

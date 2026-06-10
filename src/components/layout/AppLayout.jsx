@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Navbar from './Navbar.jsx'
 import { useAuth } from '../../context/AuthContext.jsx'
@@ -28,6 +29,7 @@ export default function AppLayout({ eyebrow, title, description, children }) {
               {getInitials(user?.email)}
             </div>
             <Button type="button" variant="outline" size="lg" onClick={handleLogout}>
+              <LogOut aria-hidden="true" className="size-4" />
               Sair
             </Button>
           </div>

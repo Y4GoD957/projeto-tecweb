@@ -1,3 +1,4 @@
+import { Eye, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { TYPE_BADGES } from '@/lib/constants'
@@ -19,9 +20,11 @@ export default function SelectedAssets({ assets, activeAssetId, setActiveAssetId
             <p className="mt-1 text-xs text-zinc-400">{asset.symbol}</p>
           </div>
           <Button type="button" variant={asset.id === activeAssetId ? 'default' : 'secondary'} size="sm" onClick={() => setActiveAssetId(asset.id)}>
+            <Eye aria-hidden="true" className="size-4" />
             {asset.id === activeAssetId ? 'Ativo' : 'Abrir'}
           </Button>
           <Button type="button" variant="destructive" size="sm" onClick={() => remove(asset)}>
+            <X aria-hidden="true" className="size-4" />
             Remover
           </Button>
         </div>

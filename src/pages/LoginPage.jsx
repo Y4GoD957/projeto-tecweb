@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { LogIn } from 'lucide-react'
 import FormField from '@/components/ui/form-field.jsx'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -92,7 +93,10 @@ export default function LoginPage() {
               required
               minLength="6"
             />
-            <Button type="submit" size="lg" className="w-full">Continuar</Button>
+            <Button type="submit" size="lg" className="w-full">
+              <LogIn aria-hidden="true" className="size-4" />
+              Continuar
+            </Button>
             <p className="min-h-6 text-sm text-zinc-400">{feedback}</p>
             </form>
           </CardContent>
