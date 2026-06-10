@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import Button from '../components/Button/Button.jsx'
-import Input from '../components/Input/Input.jsx'
+import FormField from '@/components/ui/form-field.jsx'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '../context/AuthContext.jsx'
 
 export default function LoginPage() {
@@ -36,12 +38,10 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#123255_0%,#08111f_45%,#050816_100%)] px-4 py-10 text-zinc-100">
       <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-        <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/8 p-8 shadow-[0_24px_120px_rgba(0,0,0,0.45)] backdrop-blur">
+        <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-card/80 p-8 shadow-[0_24px_120px_rgba(0,0,0,0.45)] backdrop-blur">
           <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(34,211,238,0.16),transparent_35%,rgba(249,115,22,0.12)_78%,transparent)]" />
           <div className="relative">
-            <span className="inline-flex rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.24em] text-cyan-100">
-              Pulse Invest
-            </span>
+            <Badge className="border-cyan-400/30 bg-cyan-400/10 text-cyan-100">Pulse Invest</Badge>
             <h1 className="mt-6 max-w-xl text-4xl font-semibold tracking-tight text-white sm:text-5xl">
               Gestao de investimentos com base simples, clara e pronta para evoluir.
             </h1>
@@ -63,16 +63,17 @@ export default function LoginPage() {
           </div>
         </section>
 
-        <section className="rounded-[2rem] border border-white/10 bg-slate-950/70 p-6 shadow-[0_24px_120px_rgba(0,0,0,0.42)]">
-          <div className="mb-6">
-            <p className="text-xs uppercase tracking-[0.28em] text-zinc-500">Acesso</p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">Entrar ou criar conta local</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-400">
+        <Card>
+          <CardHeader>
+            <CardDescription>Acesso</CardDescription>
+            <CardTitle>Entrar ou criar conta local</CardTitle>
+            <p className="text-sm leading-6 text-zinc-400">
               Use qualquer e-mail valido e uma senha com pelo menos 6 caracteres.
             </p>
-          </div>
-          <form className="space-y-4" autoComplete="off" onSubmit={handleSubmit}>
-            <Input
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" autoComplete="off" onSubmit={handleSubmit}>
+            <FormField
               label="E-mail"
               name="email"
               type="email"
@@ -81,7 +82,7 @@ export default function LoginPage() {
               placeholder="voce@exemplo.com"
               required
             />
-            <Input
+            <FormField
               label="Senha"
               name="password"
               type="password"
@@ -91,10 +92,11 @@ export default function LoginPage() {
               required
               minLength="6"
             />
-            <Button type="submit" className="w-full">Continuar</Button>
+            <Button type="submit" size="lg" className="w-full">Continuar</Button>
             <p className="min-h-6 text-sm text-zinc-400">{feedback}</p>
-          </form>
-        </section>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </main>
   )

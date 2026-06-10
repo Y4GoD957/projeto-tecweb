@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
-import AllocationChart from '../components/Charts/AllocationChart.jsx'
-import Button from '../components/Button/Button.jsx'
-import Card from '../components/Card/Card.jsx'
-import Input from '../components/Input/Input.jsx'
-import AppLayout from '../components/Layout/AppLayout.jsx'
+import AllocationChart from '@/components/charts/AllocationChart.jsx'
+import AssetForm from '@/components/portfolio/AssetForm.jsx'
+import AssetList from '@/components/portfolio/AssetList.jsx'
+import PortfolioFilters from '@/components/portfolio/PortfolioFilters.jsx'
+import SummaryCard from '@/components/portfolio/SummaryCard.jsx'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '../context/AuthContext.jsx'
 import { usePortfolio } from '../context/PortfolioContext.jsx'
-import { ASSET_TYPES, QUOTE_SOURCE_META, TYPE_BADGES } from '../lib/constants'
-import { createId, formatCurrency, formatDateTime, formatPercent, getVariationTone, sanitizeText } from '../lib/utils'
+import AppLayout from '@/components/layout/AppLayout.jsx'
+import { ASSET_TYPES, QUOTE_SOURCE_META } from '../lib/constants'
+import { createId, formatCurrency, formatPercent, sanitizeText } from '../lib/utils'
 import { resolveAssetDetails } from '../services/market'
 import {
   getAllocation,
@@ -207,130 +209,60 @@ export default function DashboardPage() {
       description="Acompanhe patrimonio, distribuicao e ativos da sua carteira em uma base preparada para futura integracao com backend."
     >
       <section className="grid gap-4 md:grid-cols-3">
-        <SummaryCard label="Patrimonio total" value={formatCurrency(summary.totalValue)} helper="Atualizado com o ultimo preco disponivel." />
-        <SummaryCard label="Capital investido" value={formatCurrency(summary.totalInvested)} helper="Soma calculada pela posicao da carteira." />
-        <SummaryCard label="Rentabilidade" value={formatPercent(summary.performance)} helper="Diferenca entre patrimonio atual e custo total." />
+        <SummaryCard label="Patrimonio total" value={formatCurrency(summary.totalValue)} helper="Atualizado com o ultimo preco disponivel." tone="cyan" />
+        <SummaryCard label="Capital investido" value={formatCurrency(summary.totalInvested)} helper="Soma calculada pela posicao da carteira." tone="emerald" />
+        <SummaryCard label="Rentabilidade" value={formatPercent(summary.performance)} helper="Diferenca entre patrimonio atual e custo total." tone="amber" />
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
-        <Card title={editingId ? 'Editar ativo' : 'Novo ativo'} description={editingId ? 'Ajustar posicao atual' : 'Cadastrar posicao'}>
-          <form className="grid gap-4 md:grid-cols-2" autoComplete="off" onSubmit={handleSubmit}>
-            <Input label="Nome do ativo" name="name" value={form.name} onChange={handleFormChange} onBlur={() => handleAutofill('name')} placeholder="Tesouro Selic 2029" required />
-            <Input label="Ticker / Codigo" name="symbol" value={form.symbol} onChange={handleFormChange} onBlur={() => handleAutofill('symbol')} placeholder={symbolRule.symbolPlaceholder} hint={symbolRule.symbolHint} error={symbolError} required className="uppercase" />
-            <Input label="Tipo" as="select" name="type" value={form.type} onChange={handleFormChange} required className="bg-slate-950">
-              {ASSET_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
-            </Input>
-            <Input label="Quantidade" name="quantity" type="number" min="0.0001" step="0.0001" value={form.quantity} onChange={handleFormChange} placeholder="10" required />
-            <Input label="Valor atual de mercado (BRL)" name="marketValue" type="number" min="0.01" step="0.01" value={form.marketValue} onChange={handleFormChange} placeholder="0.00" required />
-            <input type="hidden" name="currentPrice" value={form.currentPrice} readOnly />
-            <p className="min-h-5 text-xs leading-5 text-zinc-500 md:col-span-2">
-              {autofillStatus || (providers.length ? `Autopreenchimento disponivel via ${providers.join(', ')}.` : 'Preenchimento manual para este tipo.')}
-            </p>
-            <Button type="submit">{editingId ? 'Salvar ativo' : 'Adicionar ativo'}</Button>
-            <Button type="button" variant="secondary" onClick={refreshPortfolio} disabled={loading}>
-              {loading ? 'Atualizando...' : 'Atualizar cotacoes'}
-            </Button>
-            {editingId ? (
-              <Button type="button" variant="accent" className="md:col-span-2" onClick={() => { setEditingId(null); setForm(emptyForm); setManualField(null) }}>
-                Cancelar edicao
-              </Button>
-            ) : null}
-          </form>
-          <p className="mt-4 min-h-6 text-sm text-zinc-400">{feedback || error}</p>
+        <Card>
+          <CardHeader>
+            <CardDescription>{editingId ? 'Ajustar posicao atual' : 'Cadastrar posicao'}</CardDescription>
+            <CardTitle>{editingId ? 'Editar ativo' : 'Novo ativo'}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AssetForm
+              editingId={editingId}
+              form={form}
+              symbolRule={symbolRule}
+              symbolError={symbolError}
+              providers={providers}
+              autofillStatus={autofillStatus}
+              feedback={feedback}
+              error={error}
+              loading={loading}
+              onChange={handleFormChange}
+              onSubmit={handleSubmit}
+              onAutofill={handleAutofill}
+              onRefresh={refreshPortfolio}
+              onCancel={() => { setEditingId(null); setForm(emptyForm); setManualField(null) }}
+            />
+          </CardContent>
         </Card>
 
-        <Card title="Distribuicao" description="Carteira por categoria">
-          <AllocationChart allocation={allocation} />
+        <Card>
+          <CardHeader>
+            <CardDescription>Carteira por categoria</CardDescription>
+            <CardTitle>Distribuicao</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AllocationChart allocation={allocation} />
+          </CardContent>
         </Card>
       </section>
 
-      <Card title="Carteira" description="Ativos cadastrados">
-        <Filters filters={filters} setFilters={setFilters} total={assets.length} visible={filteredAssets.length} />
-        <div className="mt-5">
+      <Card>
+        <CardHeader>
+          <CardDescription>Ativos cadastrados</CardDescription>
+          <CardTitle>Carteira</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <PortfolioFilters filters={filters} setFilters={setFilters} total={assets.length} visible={filteredAssets.length} />
+          <div className="mt-5">
           <AssetList assets={filteredAssets} onEdit={startEdit} onDelete={deleteAsset} />
-        </div>
+          </div>
+        </CardContent>
       </Card>
     </AppLayout>
-  )
-}
-
-function SummaryCard({ label, value, helper }) {
-  return (
-    <div className="rounded-3xl border border-white/10 bg-slate-950/45 p-5">
-      <p className="text-xs uppercase tracking-[0.24em] text-zinc-500">{label}</p>
-      <p className="mt-3 text-3xl font-semibold tracking-tight text-white">{value}</p>
-      <p className="mt-2 text-sm text-zinc-400">{helper}</p>
-    </div>
-  )
-}
-
-function Filters({ filters, setFilters, total, visible }) {
-  function handleChange(event) {
-    const { name, value } = event.target
-    setFilters((current) => ({ ...current, [name]: value }))
-  }
-
-  return (
-    <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
-      <Input label="Tipo" as="select" name="type" value={filters.type} onChange={handleChange} className="bg-slate-950">
-        {['Todos', ...ASSET_TYPES].map((type) => <option key={type} value={type}>{type}</option>)}
-      </Input>
-      <Input label="Desempenho" as="select" name="performance" value={filters.performance} onChange={handleChange} className="bg-slate-950">
-        {['Todos', 'Positivos', 'Negativos', 'Neutros'].map((option) => <option key={option} value={option}>{option}</option>)}
-      </Input>
-      <div className="rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3 text-sm text-zinc-300">
-        {visible} de {total} ativo(s)
-      </div>
-    </div>
-  )
-}
-
-function AssetList({ assets, onEdit, onDelete }) {
-  if (!assets.length) {
-    return (
-      <div className="rounded-3xl border border-dashed border-white/10 bg-white/4 p-8 text-center">
-        <p className="text-lg font-medium text-white">Nenhum ativo encontrado</p>
-        <p className="mt-2 text-sm text-zinc-400">Ajuste os filtros ou cadastre um novo ativo.</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-3">
-      {assets.map((asset) => (
-        <article key={asset.id} className="grid gap-4 rounded-3xl border border-white/10 bg-slate-950/35 p-4 lg:grid-cols-[1.45fr_0.95fr_0.75fr_auto] lg:items-center">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-lg font-medium text-white">{asset.name}</h3>
-              <span className={`rounded-full px-3 py-1 text-xs font-medium ${TYPE_BADGES[asset.type] || 'bg-white/10 text-zinc-200'}`}>{asset.type}</span>
-              <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-zinc-300">{asset.symbol}</span>
-            </div>
-            <p className="mt-2 text-sm text-zinc-400">Quantidade {asset.quantity}</p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${asset.quoteBadgeClass}`}>
-                {asset.quoteSourceLabel}
-              </span>
-              <span className="text-xs text-zinc-500">Atualizado em {formatDateTime(asset.quoteUpdatedAt)}</span>
-              <span className="basis-full text-xs text-zinc-500">
-                {asset.isFallbackQuote ? 'Estimativa local usada quando a API nao retorna cotacao valida.' : 'Cotacao carregada por provedor externo.'}
-              </span>
-            </div>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-zinc-500">Valor atual</p>
-            <p className="mt-2 text-lg font-medium text-white">{formatCurrency(asset.marketValue)}</p>
-            <p className="mt-1 text-sm text-zinc-400">Fonte: {asset.quoteSourceLabel}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-zinc-500">Variacao</p>
-            <p className={`mt-2 text-lg font-medium ${getVariationTone(asset.variation)}`}>{formatPercent(asset.variation)}</p>
-          </div>
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button type="button" variant="secondary" className="h-10" onClick={() => onEdit(asset)}>Editar</Button>
-            <Button type="button" variant="danger" className="h-10" onClick={() => onDelete(asset.id)}>Remover</Button>
-          </div>
-        </article>
-      ))}
-    </div>
   )
 }
