@@ -144,6 +144,21 @@ npm run preview
 - Rotas principais: `/`, `/inicio`, `/cadastro`, `/listagem`, `/dashboard` e `/trader`.
 - Acesso direto às rotas React funciona em ambiente de desenvolvimento Vite.
 
+## Auditoria Final de Conformidade
+
+Auditoria realizada em 10/06/2026 contra os requisitos finais da atividade:
+
+- Menu obrigatório atendido com `Início`, `Cadastro`, `Listagem`, `Dashboard` e `Trader`.
+- Rotas React protegidas e acessíveis por `/inicio`, `/cadastro`, `/listagem`, `/dashboard` e `/trader`.
+- Cadastro de ativos separado em `/cadastro`, com formulário controlado, `onChange`, `onSubmit`, `preventDefault()` e validação.
+- Listagem separada em `/listagem`, renderizando dados dinâmicos do `PortfolioContext`.
+- Estado compartilhado entre páginas com Context API e persistência por usuário no LocalStorage.
+- Integração REST centralizada em `src/services/market.js`, exibindo cotações, fontes, busca de ativos e séries do Trader com fallback.
+- Interface mantida com identidade financeira escura, Tailwind CSS, shadcn/ui, CSS global e grids responsivos.
+- Build final aprovado com `npm run build`.
+- Nenhuma nova issue local foi necessária nesta auditoria, pois os requisitos funcionais já estavam atendidos no código.
+- O GitHub CLI estava instalado, mas a conta local retornou token inválido e falha de conexão com `api.github.com`; por isso issues, PR e GitHub Project precisam ser conferidos manualmente se a autenticação não for renovada.
+
 ## Kanban no GitHub Projects
 
 O GitHub CLI/API pode falhar em ambientes sem token valido ou sem acesso a `api.github.com`. Quando isso ocorrer, configurar o Project manualmente:
