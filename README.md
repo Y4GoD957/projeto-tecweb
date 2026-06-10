@@ -15,6 +15,7 @@ Aplicacao web para acompanhamento de carteira de investimentos pessoais, reconst
 - Filtros por tipo e desempenho
 - Painel Trader com busca de ativos, selecao multipla, periodo customizado e candle chart em Canvas
 - Fallback local para manter a interface funcional quando APIs externas falham
+- Menu principal com Início, Cadastro, Listagem, Dashboard e Trader
 
 ## Stack
 
@@ -70,10 +71,13 @@ src/
 | Rota | Descricao |
 |---|---|
 | `/` | Login e criacao de conta local |
+| `/inicio` | Pagina inicial protegida com resumo, metricas e atalhos |
+| `/cadastro` | Cadastro protegido de ativos com formulario controlado e validacao |
+| `/listagem` | Listagem protegida e dinamica dos ativos cadastrados |
 | `/dashboard` | Dashboard da carteira, protegido por login |
 | `/trader` | Painel de busca e candle chart, protegido por login |
 
-Os arquivos `dashboard/index.html` e `trader/index.html` tambem apontam para a SPA para manter acesso direto com barra final em ambiente Vite.
+Os arquivos `dashboard/index.html` e `trader/index.html` tambem apontam para a SPA para manter acesso direto com barra final em ambiente Vite. Em desenvolvimento com Vite, as rotas React `/inicio`, `/cadastro`, `/listagem`, `/dashboard` e `/trader` funcionam por acesso direto.
 
 ## APIs de mercado
 
@@ -117,12 +121,55 @@ npm run preview
 - Interface escura financeira com Tailwind CSS, shadcn/ui, estados vazios, feedback visual e responsividade.
 - Historico de commits granular e issues em portugues para migracao e refinamento.
 
+## Atendimento aos Requisitos da Atividade
+
+| Requisito | Como foi atendido |
+|---|---|
+| Menu com Início, Cadastro e Listagem | O menu protegido exibe `Início`, `Cadastro`, `Listagem`, `Dashboard` e `Trader`. |
+| Roteamento React | `React Router DOM` define as rotas `/`, `/inicio`, `/cadastro`, `/listagem`, `/dashboard` e `/trader`, com protecao por `ProtectedRoute`. |
+| Formulário controlado | A rota `/cadastro` usa `AssetForm` com valores controlados pelo hook `useAssetForm`. |
+| Validação de campos | O cadastro valida campos obrigatorios, ticker por tipo de ativo, quantidade e valor de mercado antes de salvar. |
+| Listagem dinâmica | A rota `/listagem` renderiza dinamicamente os ativos cadastrados, com filtros e estados vazios. |
+| Estado compartilhado | `PortfolioContext` compartilha a carteira entre Cadastro, Listagem, Início e Dashboard, com persistencia por usuario no LocalStorage. |
+| Integração com API REST | `src/services/market.js` consome BrAPI, CoinGecko, Twelve Data e Alpha Vantage para cotacoes, busca e series historicas. |
+| Estilização e responsividade | A interface usa Tailwind CSS, shadcn/ui e CSS global em `src/style.css`, com grids responsivos para desktop, tablet e celular. |
+| GitHub e commits | O repositorio esta no GitHub e o historico possui commits granulares por migracao, refinamento visual, rotas e documentacao. |
+| Kanban no GitHub Projects | O fluxo esta documentado em issues e no Kanban do README; se o GitHub Projects nao puder ser atualizado via CLI, seguir as instrucoes manuais abaixo. |
+| Execução local | Executar com `npm install` e `npm run dev`; validar producao com `npm run build`. |
+
 ## Validacao
 
 - Build de producao aprovado com `npm run build`.
 - O projeto nao possui script de lint configurado no `package.json`; por isso lint nao foi executado.
-- Rotas principais: `/`, `/dashboard` e `/trader`.
-- Acesso direto a `/dashboard` e `/trader` funciona em ambiente Vite porque os HTMLs dessas pastas apontam para a SPA.
+- Rotas principais: `/`, `/inicio`, `/cadastro`, `/listagem`, `/dashboard` e `/trader`.
+- Acesso direto às rotas React funciona em ambiente de desenvolvimento Vite.
+
+## Auditoria Final de Conformidade
+
+Auditoria realizada em 10/06/2026 contra os requisitos finais da atividade:
+
+- Menu obrigatório atendido com `Início`, `Cadastro`, `Listagem`, `Dashboard` e `Trader`.
+- Rotas React protegidas e acessíveis por `/inicio`, `/cadastro`, `/listagem`, `/dashboard` e `/trader`.
+- Cadastro de ativos separado em `/cadastro`, com formulário controlado, `onChange`, `onSubmit`, `preventDefault()` e validação.
+- Listagem separada em `/listagem`, renderizando dados dinâmicos do `PortfolioContext`.
+- Estado compartilhado entre páginas com Context API e persistência por usuário no LocalStorage.
+- Integração REST centralizada em `src/services/market.js`, exibindo cotações, fontes, busca de ativos e séries do Trader com fallback.
+- Interface mantida com identidade financeira escura, Tailwind CSS, shadcn/ui, CSS global e grids responsivos.
+- Build final aprovado com `npm run build`.
+- Nenhuma nova issue local foi necessária nesta auditoria, pois os requisitos funcionais já estavam atendidos no código.
+- O GitHub CLI estava instalado, mas a conta local retornou token inválido e falha de conexão com `api.github.com`; por isso issues, PR e GitHub Project precisam ser conferidos manualmente se a autenticação não for renovada.
+
+## Kanban no GitHub Projects
+
+O GitHub CLI/API pode falhar em ambientes sem token valido ou sem acesso a `api.github.com`. Quando isso ocorrer, configurar o Project manualmente:
+
+1. Abrir o repositorio no GitHub.
+2. Acessar a aba `Projects`.
+3. Criar um novo Project no formato Board/Kanban.
+4. Criar as colunas `A Fazer`, `Em Desenvolvimento`, `Em Revisão` e `Concluído`.
+5. Adicionar as issues #9 a #19 e a issue de adequacao final das rotas, se criada manualmente.
+6. Mover issues concluídas para `Concluído`.
+7. Manter #5, #6 e #7 em `A Fazer`, pois representam evoluções futuras fora desta entrega.
 
 ## Workflow / Kanban
 
@@ -168,6 +215,7 @@ npm run preview
 - Issue #17: Refinamento dos componentes reutilizaveis
 - Issue #18: Melhoria das telas de login, dashboard e trader
 - Issue #19: Revisao de README, Kanban e preparacao do Pull Request
+- Adequacao final do menu e das rotas aos requisitos da atividade
 - Alias `@/*` configurado para imports internos
 - Estrutura `components/ui`, `portfolio`, `trader`, `layout` e `charts` organizada
 - Componentes shadcn/ui aplicados em cards, botoes, inputs, badges, alerts e separadores
