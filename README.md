@@ -1,6 +1,6 @@
 # Pulse Invest
 
-Aplicacao web para acompanhamento de carteira de investimentos pessoais, reconstruida com React + Vite a partir da versao original em Vanilla HTML, CSS e JavaScript.
+Aplicacao web para acompanhamento de carteira de investimentos pessoais, reconstruida com React + Vite e refinada com Tailwind CSS + shadcn/ui a partir da versao original em Vanilla HTML, CSS e JavaScript.
 
 ## Funcionalidades
 
@@ -21,24 +21,26 @@ Aplicacao web para acompanhamento de carteira de investimentos pessoais, reconst
 - React
 - Vite
 - React Router DOM
+- Context API
 - JavaScript
-- Tailwind CSS via CSS global
+- Tailwind CSS
+- shadcn/ui
 - Chart.js
+- Camada de services para APIs de mercado
 - LocalStorage
 
 ## Estrutura
 
 ```txt
 src/
+  assets/
   components/
-    Button/
-    Card/
-    Charts/
-    Input/
-    Layout/
-    Navbar/
+    charts/
+    layout/
+    portfolio/
+    trader/
+    ui/
   context/
-  hooks/
   lib/
   pages/
   routes/
@@ -52,7 +54,11 @@ src/
 ## Arquitetura
 
 - `src/pages`: telas de rota da aplicacao.
-- `src/components`: componentes reutilizaveis de UI, layout e graficos.
+- `src/components/ui`: componentes base shadcn/ui e wrappers de formulario.
+- `src/components/layout`: estrutura global, cabecalho e navegacao.
+- `src/components/portfolio`: componentes de dominio da carteira.
+- `src/components/trader`: componentes de dominio do painel trader.
+- `src/components/charts`: graficos com Chart.js e Canvas.
 - `src/context`: estado compartilhado de autenticacao e carteira.
 - `src/routes`: protecao de rotas privadas.
 - `src/services`: integracao com APIs externas e series de mercado.
@@ -101,11 +107,31 @@ npm run build
 npm run preview
 ```
 
+## Cobertura dos criterios de avaliacao
+
+- Arquitetura modular com separacao entre paginas, componentes de UI, componentes de dominio, contexts, services, lib e utils.
+- Navegacao protegida com React Router DOM e estado de autenticacao centralizado.
+- Estado de carteira organizado com Context API e persistencia isolada em LocalStorage.
+- Integracao com BrAPI, CoinGecko, Twelve Data e Alpha Vantage isolada em `src/services/market.js`, com fallback local.
+- Formularios controlados com `onChange`, `onSubmit`, `preventDefault()` e validacoes por tipo de ativo.
+- Interface escura financeira com Tailwind CSS, shadcn/ui, estados vazios, feedback visual e responsividade.
+- Historico de commits granular e issues em portugues para migracao e refinamento.
+
+## Validacao
+
+- Build de producao aprovado com `npm run build`.
+- O projeto nao possui script de lint configurado no `package.json`; por isso lint nao foi executado.
+- Rotas principais: `/`, `/dashboard` e `/trader`.
+- Acesso direto a `/dashboard` e `/trader` funciona em ambiente Vite porque os HTMLs dessas pastas apontam para a SPA.
+
 ## Workflow / Kanban
 
 ### To Do
 
-- Revisar criterios da atividade
+- Issues futuras que nao fazem parte desta entrega:
+- #5 Area de cadastro separada do login
+- #6 Area do usuario para verificar e alterar informacoes
+- #7 Banco de dados low-code em JSON
 
 ### In Progress
 
@@ -113,7 +139,7 @@ npm run preview
 
 ### In Review
 
-- Validar criterios finais da atividade
+- Pull Request de entrega final
 
 ### Done
 
@@ -137,3 +163,14 @@ npm run preview
 - Build de producao validado
 - Organizacao do codigo revisada
 - README atualizado
+- Issue #15: Auditoria da arquitetura React e criterios de avaliacao
+- Issue #16: Configuracao de Tailwind CSS e shadcn/ui
+- Issue #17: Refinamento dos componentes reutilizaveis
+- Issue #18: Melhoria das telas de login, dashboard e trader
+- Issue #19: Revisao de README, Kanban e preparacao do Pull Request
+- Alias `@/*` configurado para imports internos
+- Estrutura `components/ui`, `portfolio`, `trader`, `layout` e `charts` organizada
+- Componentes shadcn/ui aplicados em cards, botoes, inputs, badges, alerts e separadores
+- Interface financeira escura refinada
+- Responsividade revisada para desktop, tablet e celular
+- Pull Request preparado em portugues
