@@ -33,7 +33,7 @@ export default function LoginPage() {
     }
 
     setFeedback('Redirecionando para o dashboard...')
-    navigate(location.state?.from || '/dashboard', { replace: true })
+    navigate(location.state?.from || '/inicio', { replace: true })
   }
 
   return (

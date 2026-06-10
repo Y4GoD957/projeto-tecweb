@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { TYPE_BADGES } from '@/lib/constants'
 import { formatCurrency, formatDateTime, formatPercent, getVariationTone } from '@/lib/utils'
 
-export default function AssetList({ assets, onEdit, onDelete }) {
+export default function AssetList({ assets, onEdit, onDelete, showEdit = true }) {
   if (!assets.length) {
     return (
       <div className="rounded-2xl border border-dashed border-white/10 bg-white/4 p-8 text-center">
@@ -52,10 +52,12 @@ export default function AssetList({ assets, onEdit, onDelete }) {
               <p className={`mt-1 text-lg font-medium ${getVariationTone(asset.variation)}`}>{formatPercent(asset.variation)}</p>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
-              <Button type="button" variant="outline" size="lg" onClick={() => onEdit(asset)}>
-                <Pencil aria-hidden="true" className="size-4" />
-                Editar
-              </Button>
+              {showEdit ? (
+                <Button type="button" variant="outline" size="lg" onClick={() => onEdit(asset)}>
+                  <Pencil aria-hidden="true" className="size-4" />
+                  Editar
+                </Button>
+              ) : null}
               <Button type="button" variant="destructive" size="lg" onClick={() => onDelete(asset.id)}>
                 <Trash2 aria-hidden="true" className="size-4" />
                 Remover
